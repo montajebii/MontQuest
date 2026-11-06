@@ -7,6 +7,22 @@
 - [ ] `npm run doctor` بدون failure (هشدار لایسنس مانع تست debug نیست)
 - [ ] یک AVD معمولی (x86_64، API 30+) — نقشه MapLibre است و به Google Play Services نیازی ندارد؛ فقط اینترنت برای کاشی‌های OpenFreeMap لازم است
 - [ ] `npm run android` — اپ روی شبیه‌ساز بالا بیاید و نقشه 8-bit (پس‌زمینه تیره، جاده‌ها زرد/سفید) رندر شود
+
+### ساخت و نصب APK مستقل روی گوشی (بدون Metro) — برای تست دستگاهی
+
+نکتهٔ مهم: **APK دیباگ یک بیلد توسعه است** و JS را از Metro می‌خواند — بدون `npm start` و کابل، با «Unable to load script» باز می‌شود (رفتار طبیعی، باگ نیست). برای تست مستقل روی گوشی، **نسخهٔ Release** را بسازید: کد JS با Hermes داخل APK پکیج می‌شود، نیازی به Metro/کابل ندارد، با debug keystore امضا می‌شود (بدون نیاز به ساخت Keystore شخصی) و چون فقط ABIهای دستگاه را می‌سازد، **حجمش چند برابر کمتر** از debug است:
+
+```bash
+cd android
+./gradlew assembleRelease
+# خروجی:  android/app/build/outputs/apk/release/app-release.apk
+adb install -r -t -g app/build/outputs/apk/release/app-release.apk
+```
+
+فلگ‌های نصب: `-r` جایگزینی نسخهٔ قبلی، `-t` اجازهٔ نصب بسته‌های تستی، `-g` **اعطای خودکار مجوزهای runtime** (موقعیت + نوتیفیکیشن — پس مرحلهٔ اجازه‌دادن دستی را لازم نیست تکرار کنید).
+
+- [ ] `app-release.apk` روی گوشی نصب و **بدون کابل** بالا بیاید (اگر صفحهٔ قرمز «Unable to load script» دیدید یعنی اشتباهاً debug APK نصب کرده‌اید)
+- [ ] ⚠️ **شبیه‌ساز:** ABIهای x86/x86_64 از تنظیمات حذف شده‌اند؛ برای تست روی شبیه‌ساز موقتاً بسازید: `./gradlew assembleDebug -PreactNativeArchitectures=arm64-v8a,x86_64`
 - [ ] اولین اجرا: مجوز Location را **«Allow all the time»** بدهید (تنظیمات ← Apps ← MontQuest ← Permissions ← Location ← Allow all the time) و مجوز Notifications را Allow کنید
 - [ ] برای تست Release لایسنس TransistorSoft لازم است (نگاه: RELEASE_CHECKLIST.md) — برای همهٔ تست‌های این فایل build **debug** کافی است
 

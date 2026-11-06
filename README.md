@@ -77,7 +77,14 @@ android/.../com/montquest/   + MoveToBackgroundModule.kt (moveTaskToBack برا�
    ```
 5. **اولین اجرای اپ:** مجوز Location را روی **«Allow all the time»** و مجوز Notifications را Allow کنید (برای ردیابی پس‌زمینه الزامی است — AC-13 وضعیت مجوزها را در Options نشان می‌دهد).
 6. **اولین کوئست:** Play ← دکمهٔ «+» ← عنوان و شرح ← روی نقشه بزنید یا «موقعیت من» ← شعاع ← ذخیره. راهنمای کامل تست: [TESTING.md](TESTING.md).
-7. **لایسنس TransistorSoft:** build **debug** بدون لایسنس کار می‌کند؛ برای build Release کلید Android (`com.transistorsoft.locationmanager.license` در مانیفست) و iOS (`TSLocationManagerLicense` در Info.plist) لازم است — مرحله‌به‌مرحله در [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md).
+7. **تست مستقل روی گوشی (بدون Metro):** ‏APK دیباگ بیلد توسعه است و به Metro نیاز دارد؛ برای تست مستقل، بیلد Release بگیرید — JS داخل APK پکیج می‌شود و حجمش با ABIهای فقط-دستگاه بسیار کمتر است:
+
+   ```bash
+   cd android && ./gradlew assembleRelease
+   adb install -r -t -g app/build/outputs/apk/release/app-release.apk
+   ```
+
+8. **لایسنس TransistorSoft:** build **debug** بدون لایسنس کار می‌کند؛ برای build Release کلید Android (`com.transistorsoft.locationmanager.license` در مانیفست) و iOS (`TSLocationManagerLicense` در Info.plist) لازم است — مرحله‌به‌مرحله در [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md).
 
 ```bash
 npm test          # تست‌های jest
