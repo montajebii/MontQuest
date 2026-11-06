@@ -26,6 +26,8 @@ import { onQuestCompleted } from '../services/rewardService';
 import {
   ensureForegroundLocationPermission,
   getCurrentLocation,
+  getLocationAccuracy,
+  hasForegroundLocationPermission,
   isGpsEnabled,
 } from '../services/locationService';
 import { fetchNearbyPois } from '../services/poiService';
@@ -35,6 +37,7 @@ import {
   QUEST_MARKER_DONE_PNG,
 } from '../assets/questMarkerIcons';
 import { POI_ICONS } from '../assets/poiIcons';
+import { MAP_TEXTURES } from '../assets/mapTextures';
 import { CRT_SCANLINES_PNG } from '../assets/crtScanlines';
 import {
   DEFAULT_LATITUDE,
@@ -187,6 +190,12 @@ const MapScreen = ({ navigation }: any) => {
     } catch {}
   }, []);
 
+  // Re-check (no dialog) whenever the screen regains focus — the user may
+  // have flipped the permission in system settings while we were away.
+  const refreshLocationPermission = useCallback(async () => {
+    setLocationAllowed(await hasForegroundLocationPermission());
+  }, []);
+
   // First load: runtime permission (PermissionsAndroid) → centre the camera
   // on the user + pull nearby POIs. Silent fallbacks keep the default view.
   useEffect(() => {
@@ -211,10 +220,11 @@ const MapScreen = ({ navigation }: any) => {
   useFocusEffect(
     useCallback(() => {
       loadQuests().catch(() => {});
+      refreshLocationPermission().catch(() => {});
       return onQuestCompleted(() => {
         loadQuests().catch(() => {});
       });
-    }, [loadQuests]),
+    }, [loadQuests, refreshLocationPermission]),
   );
 
   const geofenceShape = useMemo(() => buildGeofenceShape(activeQuests), [activeQuests]);
@@ -264,6 +274,17 @@ const MapScreen = ({ navigation }: any) => {
         ],
       );
       return;
+    }
+    // Android 14: "Approximate only" breaks precise fixes and geofencing.
+    if ((await getLocationAccuracy()) === 'reduced') {
+      Alert.alert(
+        'دقت موقعیت محدود است',
+        'مجوز موقعیت روی «Approximate» است. برای عملکرد درست ژئوفنس، در تنظیمات ← Location ← MontQuest گزینهٔ «Precise» را فعال کنید.',
+        [
+          { text: 'باز کردن تنظیمات', onPress: () => Linking.openSettings() },
+          { text: 'ادامه', style: 'cancel' },
+        ],
+      );
     }
     try {
       const pos = await getCurrentLocation();
@@ -339,6 +360,10 @@ const MapScreen = ({ navigation }: any) => {
                   'poi-coffee': POI_ICONS.coffee,
                   'poi-food': POI_ICONS.food,
                   'poi-tree': POI_ICONS.tree,
+                  'tex-grass': MAP_TEXTURES['tex-grass'],
+                  'tex-water': MAP_TEXTURES['tex-water'],
+                  'tex-road': MAP_TEXTURES['tex-road'],
+                  'tex-building': MAP_TEXTURES['tex-building'],
                 }}
               />
 

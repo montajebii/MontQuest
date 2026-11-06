@@ -182,6 +182,36 @@ export const ensureForegroundLocationPermission = async (): Promise<boolean> => 
   }
 };
 
+/** Check-only variant (no dialog) for refresh-on-focus flows. */
+export const hasForegroundLocationPermission = async (): Promise<boolean> => {
+  if (Platform.OS !== 'android') {return true;}
+  try {
+    return await PermissionsAndroid.check(
+      PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+    );
+  } catch {
+    return false;
+  }
+};
+
+export type AccuracyMode = 'full' | 'reduced' | 'unknown';
+
+/**
+ * Android 12+/14: the user may grant "Approximate" only — geofencing and
+ * a usable position then need "Precise" (accuracyAuthorization: 0=Full,
+ * 1=Reduced per the BG-geolocation types).
+ */
+export const getLocationAccuracy = async (): Promise<AccuracyMode> => {
+  try {
+    const provider = await BackgroundGeolocation.getProviderState();
+    if (provider.accuracyAuthorization === 1) {return 'reduced';}
+    if (provider.accuracyAuthorization === 0) {return 'full';}
+    return 'unknown';
+  } catch {
+    return 'unknown';
+  }
+};
+
 /** Whether the OS location service (GPS) is switched on at all. */
 export const isGpsEnabled = async (): Promise<boolean> => {
   try {

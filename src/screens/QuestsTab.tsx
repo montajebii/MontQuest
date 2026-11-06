@@ -32,7 +32,19 @@ interface Props {
   onChanged?: () => void;
 }
 
-const formatDate = (ts: number): string => new Date(ts).toLocaleString('fa-IR');
+/**
+ * Hermes may not support the fa-IR Intl locale on every device — a throw
+ * here was the prime QuestsTab crash suspect. Fall back to ISO formatting.
+ */
+const formatDate = (ts: number): string => {
+  const date = new Date(ts);
+  if (Number.isNaN(date.getTime())) {return '—';}
+  try {
+    return date.toLocaleString('fa-IR');
+  } catch {
+    return date.toISOString();
+  }
+};
 
 /**
  * Quests tab (spec §4/§3-15): live quests + completed history.
@@ -46,8 +58,15 @@ const QuestsTab = ({ navigation, onChanged }: Props) => {
   const [selected, setSelected] = useState<Quest | null>(null);
 
   const load = useCallback(async () => {
-    setLive(await getActiveQuests());
-    setHistory(await getQuestHistoryWithTitles());
+    try {
+      setLive(await getActiveQuests());
+      setHistory(await getQuestHistoryWithTitles());
+    } catch (e) {
+      // Never crash the tab on a DB hiccup (legacy rows, migration race).
+      console.error('[MontQuest] quests tab load failed:', e);
+      setLive([]);
+      setHistory([]);
+    }
   }, []);
 
   useFocusEffect(

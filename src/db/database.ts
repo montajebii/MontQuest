@@ -51,4 +51,40 @@ export const initDB = async () => {
   for (const sql of stmts) {
     await db.executeSql(sql);
   }
+  await migrateDB(db);
+};
+
+/**
+ * Device-QA migration: quests written by older builds may lack columns
+ * that newer code expects. Adds any missing `quests` column with a safe
+ * default instead of crashing on read (audit: QuestsTab crash).
+ */
+const QUESTS_EXPECTED_COLUMNS: Array<{ name: string; ddl: string }> = [
+  { name: 'title', ddl: "TEXT NOT NULL DEFAULT ''" },
+  { name: 'task', ddl: "TEXT NOT NULL DEFAULT ''" },
+  { name: 'latitude', ddl: 'REAL NOT NULL DEFAULT 0' },
+  { name: 'longitude', ddl: 'REAL NOT NULL DEFAULT 0' },
+  { name: 'radius', ddl: 'REAL NOT NULL DEFAULT 100' },
+  { name: 'status', ddl: "TEXT NOT NULL DEFAULT 'active'" },
+  { name: 'created_at', ddl: 'INTEGER NOT NULL DEFAULT 0' },
+  { name: 'completed_at', ddl: 'INTEGER' },
+];
+
+export const migrateDB = async (db: {
+  executeSql: (
+    sql: string,
+    params?: unknown[],
+  ) => Promise<Array<{ rows: { length: number; item: (i: number) => { name: string } } }>>;
+}): Promise<void> => {
+  const [res] = await db.executeSql('PRAGMA table_info(quests)');
+  const rows = res?.rows;
+  const existing = new Set<string>();
+  for (let i = 0; i < (rows?.length ?? 0); i++) {
+    existing.add(String(rows.item(i).name));
+  }
+  for (const col of QUESTS_EXPECTED_COLUMNS) {
+    if (!existing.has(col.name)) {
+      await db.executeSql(`ALTER TABLE quests ADD COLUMN ${col.name} ${col.ddl}`);
+    }
+  }
 };

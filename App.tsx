@@ -5,6 +5,7 @@ import { GameProvider } from './src/state/GameContext';
 import AppNavigator from './src/navigation/AppNavigator';
 import { navigationRef } from './src/navigation/navigationRef';
 import NearbyQuestOverlay from './src/components/NearbyQuestOverlay';
+import ErrorBoundary from './src/components/ErrorBoundary';
 
 /**
  * Notification tap → open the Map screen (pressAction 'default').
@@ -34,8 +35,11 @@ notifee.onBackgroundEvent(async (event) => {
 const App = () => (
   <GameProvider>
     <StatusBar barStyle="light-content" backgroundColor="#000" />
-    <AppNavigator />
-    <NearbyQuestOverlay />
+    {/* Crash guard: legacy DB rows or render errors must never red-screen */}
+    <ErrorBoundary>
+      <AppNavigator />
+      <NearbyQuestOverlay />
+    </ErrorBoundary>
   </GameProvider>
 );
 
