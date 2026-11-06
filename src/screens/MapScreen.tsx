@@ -175,6 +175,11 @@ const MapScreen = ({ navigation }: any) => {
   const [locationAllowed, setLocationAllowed] = useState(false);
   const [mapHeading, setMapHeading] = useState(0);
   const [pois, setPois] = useState<FeatureCollection | null>(null);
+  const [gpsStatus, setGpsStatus] = useState<'loading' | 'ok' | 'error'>('loading');
+  const [userPos, setUserPos] = useState<{
+    latitude: number;
+    longitude: number;
+  } | null>(null);
 
   const mapRef = useRef<MapLibreRN.MapViewRef | null>(null);
   const cameraRef = useRef<MapLibreRN.CameraRef | null>(null);
@@ -196,20 +201,32 @@ const MapScreen = ({ navigation }: any) => {
     setLocationAllowed(await hasForegroundLocationPermission());
   }, []);
 
-  // First load: runtime permission (PermissionsAndroid) → centre the camera
-  // on the user + pull nearby POIs. Silent fallbacks keep the default view.
+  // First load: runtime permission (PermissionsAndroid) → one-shot fix via
+  // BackgroundGeolocation → store coords (fallback marker) + camera + POIs.
   useEffect(() => {
     (async () => {
       const allowed = await ensureForegroundLocationPermission();
       setLocationAllowed(allowed);
-      if (!allowed) {return;}
+      setGpsStatus('loading');
+      if (!allowed) {
+        setGpsStatus('error');
+        return;
+      }
+      if (!(await isGpsEnabled())) {
+        setGpsStatus('error');
+        return;
+      }
       try {
         const pos = await getCurrentLocation();
+        setUserPos({ latitude: pos.latitude, longitude: pos.longitude });
+        setGpsStatus('ok');
         cameraRef.current?.setCamera(
           cameraStop([pos.longitude, pos.latitude], 14, 0, 800),
         );
         loadPois(pos.latitude, pos.longitude);
-      } catch {}
+      } catch {
+        setGpsStatus('error');
+      }
     })();
   }, [loadPois]);
 
@@ -284,11 +301,14 @@ const MapScreen = ({ navigation }: any) => {
     }
     try {
       const pos = await getCurrentLocation();
+      setUserPos({ latitude: pos.latitude, longitude: pos.longitude });
+      setGpsStatus('ok');
       cameraRef.current?.setCamera(
         cameraStop([pos.longitude, pos.latitude], 16, 0, 800),
       );
       loadPois(pos.latitude, pos.longitude);
     } catch (e) {
+      setGpsStatus('error');
       Alert.alert('خطا', 'موقعیت فعلی دریافت نشد — در فضای باز دوباره امتحان کنید.');
     }
   }, [loadPois]);
@@ -413,11 +433,39 @@ const MapScreen = ({ navigation }: any) => {
               {/* User position: blinking pixel marker (children replace the
                   default puck) — last child so it draws on top. */}
               {locationAllowed && (
-                <MapLibreRN.UserLocation>
+                <MapLibreRN.UserLocation visible={true}>
                   <PixelUserDot />
                 </MapLibreRN.UserLocation>
               )}
             </MapLibreRN.MapView>
+
+            {/* Guaranteed-visible fallback marker at the last known fix —
+                works even if the UserLocation puck fails to render. */}
+            {userPos && (
+              <MapLibreRN.PointAnnotation
+                id="my-position-fallback"
+                coordinate={[userPos.longitude, userPos.latitude]}>
+                <PixelUserDot />
+              </MapLibreRN.PointAnnotation>
+            )}
+
+            {/* GPS status chip: loading / ok / error */}
+            <View
+              style={[
+                styles.gpsChip,
+                gpsStatus === 'ok' && styles.gpsChipOk,
+                gpsStatus === 'error' && styles.gpsChipErr,
+              ]}
+              accessibilityLiveRegion="polite"
+              accessibilityLabel={`وضعیت موقعیت: ${gpsStatus}`}>
+              <Text style={styles.gpsTxt}>
+                {gpsStatus === 'loading'
+                  ? '⏳ GPS…'
+                  : gpsStatus === 'ok'
+                    ? '✓ GPS'
+                    : '✗ GPS'}
+              </Text>
+            </View>
 
             {/* CRT scanlines for the retro-TV feel */}
             <View pointerEvents="none" style={styles.crt}>
@@ -527,6 +575,19 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   compassTxt: { color: '#0b0b12', fontSize: 20, fontWeight: 'bold' },
+  gpsChip: {
+    position: 'absolute',
+    top: 56,
+    left: 8,
+    backgroundColor: '#f8f8f8',
+    borderWidth: 2,
+    borderColor: '#0b0b12',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  gpsChipOk: { backgroundColor: '#2fbf3f' },
+  gpsChipErr: { backgroundColor: '#e8283c' },
+  gpsTxt: { color: '#0b0b12', fontFamily: 'monospace', fontSize: 11, fontWeight: 'bold' },
   tabs: {
     flexDirection: 'row-reverse',
     borderTopWidth: 3,

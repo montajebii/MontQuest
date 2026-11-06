@@ -1,7 +1,17 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, {
+  memo,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { Alert, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import MapLibreRN, { Expression, CircleLayerStyle } from '@maplibre/maplibre-react-native';
-import type { FeatureCollection } from 'geojson';
+import MapLibreRN, {
+  CircleLayerStyle,
+  type Expression,
+} from '@maplibre/maplibre-react-native';
+import type { FeatureCollection, Feature, Point } from 'geojson';
 import PixelButton from '../components/PixelButton';
 import PixelMarker from '../components/PixelMarker';
 import { addQuest, getQuestById, updateQuest } from '../db/quests';
@@ -15,13 +25,18 @@ import {
   DEFAULT_LONGITUDE,
 } from '../utils/constants';
 import mapStyle8bit from '../assets/mapStyle8bit.json';
+import { MAP_TEXTURES } from '../assets/mapTextures';
 
 /**
- * Add-quest form (spec §4, step 10-6) — also the EDIT form (Could-have #4):
- * when the route carries `questId`, it prefills from the DB and saves via
- * `updateQuest`, then re-syncs geofences so the new position/radius takes
- * effect. Otherwise it creates a new quest. Location is picked on the
- * 8-bit MapLibre map (tap) with a live meter-accurate radius preview.
+ * Add-quest form — also the EDIT form (route.params.questId): title, task,
+ * location picked on the 8-bit MapLibre map, and a geofence radius with a
+ * live meter-accurate preview ring.
+ *
+ * Device-QA isolation (camera lock fix): the map lives in a memoized child
+ * whose props only change with coord/radius — typing in the form fields
+ * never re-renders the MapView, and the Camera carries NO state-wired
+ * props (defaultSettings for the initial view; every movement is
+ * imperative through the shared cameraRef).
  */
 
 // CircleLayer radius is screen-space — same meters trick as MapScreen.
@@ -52,15 +67,96 @@ const PREVIEW_EDGE_STYLE: CircleLayerStyle = {
   circlePitchAlignment: 'map',
 };
 
+export interface QuestCoord {
+  latitude: number;
+  longitude: number;
+}
+
+interface PickerProps {
+  coord: QuestCoord;
+  radius: number;
+  /** Tap on the map — parent stores the picked coordinate. */
+  onPress: (longitude: number, latitude: number) => void;
+  /** Parent-owned camera ref: attach it so the parent can fly imperatively. */
+  cameraRef: React.MutableRefObject<MapLibreRN.CameraRef | null>;
+}
+
+/** Memoized map picker — re-renders ONLY when coord/radius change. */
+const MapPicker = memo(function MapPicker({
+  coord,
+  radius,
+  onPress,
+  cameraRef,
+}: PickerProps) {
+  const previewShape: FeatureCollection = useMemo(() => {
+    const mpp0 = metersPerPixelAtZoom0(coord.latitude);
+    const r0 = radius > 0 ? radius / mpp0 : 0;
+    return {
+      type: 'FeatureCollection',
+      features: [
+        {
+          type: 'Feature',
+          geometry: { type: 'Point', coordinates: [coord.longitude, coord.latitude] },
+          properties: { r0, r22: r0 * 2 ** 22, r0e: r0 + 1.5, r22e: r0 * 2 ** 22 + 1.5 },
+        },
+      ],
+    };
+  }, [coord.latitude, coord.longitude, radius]);
+
+  return (
+    <View style={styles.mapBox}>
+      <MapLibreRN.MapView
+        style={StyleSheet.absoluteFill}
+        mapStyle={mapStyle8bit}
+        onPress={(e: Feature) => {
+          const geometry = e?.geometry as Point | null;
+          const c = geometry?.coordinates;
+          if (Array.isArray(c) && c.length >= 2) {
+            onPress(c[0], c[1]);
+          }
+        }}
+        compassEnabled={false}
+        logoEnabled={false}
+        attributionEnabled>
+        <MapLibreRN.Camera
+          ref={cameraRef}
+          defaultSettings={{
+            centerCoordinate: [DEFAULT_LONGITUDE, DEFAULT_LATITUDE],
+            zoomLevel: 14,
+            heading: 0,
+          }}
+        />
+        <MapLibreRN.Images images={MAP_TEXTURES} />
+        <MapLibreRN.ShapeSource id="radiusPreview" shape={previewShape}>
+          <MapLibreRN.CircleLayer id="preview-fill" style={PREVIEW_FILL_STYLE} />
+          <MapLibreRN.CircleLayer
+            id="preview-edge"
+            aboveLayerID="preview-fill"
+            style={PREVIEW_EDGE_STYLE}
+          />
+        </MapLibreRN.ShapeSource>
+        <MapLibreRN.PointAnnotation
+          id="picked"
+          coordinate={[coord.longitude, coord.latitude]}>
+          <PixelMarker active />
+        </MapLibreRN.PointAnnotation>
+      </MapLibreRN.MapView>
+    </View>
+  );
+});
+
 const AddQuestScreen = ({ navigation, route }: any) => {
   const questId: number | undefined = route?.params?.questId;
   const isEdit = questId != null;
 
   const [title, setTitle] = useState('');
   const [task, setTask] = useState('');
-  const [coord, setCoord] = useState({ latitude: DEFAULT_LATITUDE, longitude: DEFAULT_LONGITUDE });
+  const [coord, setCoord] = useState<QuestCoord>({
+    latitude: DEFAULT_LATITUDE,
+    longitude: DEFAULT_LONGITUDE,
+  });
   const [radius, setRadius] = useState('');
-  const cameraRef = useRef<MapLibreRN.CameraRef | null>(null);
+  const pickerCameraRef = useRef<MapLibreRN.CameraRef | null>(null);
 
   useEffect(() => {
     navigation.setOptions({ title: isEdit ? 'ویرایش کوئست' : 'افزودن کوئست' });
@@ -77,7 +173,12 @@ const AddQuestScreen = ({ navigation, route }: any) => {
             setTask(quest.task);
             setCoord({ latitude: quest.latitude, longitude: quest.longitude });
             setRadius(String(quest.radius));
-            cameraRef.current?.flyTo([quest.longitude, quest.latitude], 600);
+            pickerCameraRef.current?.setCamera({
+              centerCoordinate: [quest.longitude, quest.latitude],
+              zoomLevel: 14,
+              heading: 0,
+              animationDuration: 600,
+            });
           }
         } catch {}
       } else {
@@ -85,7 +186,12 @@ const AddQuestScreen = ({ navigation, route }: any) => {
         try {
           const pos = await getCurrentLocation();
           setCoord(pos);
-          cameraRef.current?.flyTo([pos.longitude, pos.latitude], 600);
+          pickerCameraRef.current?.setCamera({
+            centerCoordinate: [pos.longitude, pos.latitude],
+            zoomLevel: 14,
+            heading: 0,
+            animationDuration: 600,
+          });
         } catch {}
       }
     })();
@@ -93,36 +199,23 @@ const AddQuestScreen = ({ navigation, route }: any) => {
 
   const radiusN = parseFloat(radius);
 
-  const previewShape: FeatureCollection = useMemo(() => {
-    const mpp0 = metersPerPixelAtZoom0(coord.latitude);
-    const r0 = Number.isFinite(radiusN) && radiusN > 0 ? radiusN / mpp0 : 0;
-    return {
-      type: 'FeatureCollection',
-      features: [
-        {
-          type: 'Feature',
-          geometry: { type: 'Point', coordinates: [coord.longitude, coord.latitude] },
-          properties: { r0, r22: r0 * 2 ** 22, r0e: r0 + 1.5, r22e: r0 * 2 ** 22 + 1.5 },
-        },
-      ],
-    };
-  }, [coord.latitude, coord.longitude, radiusN]);
-
   const handleUseMyLocation = useCallback(async () => {
     try {
       const pos = await getCurrentLocation();
       setCoord(pos);
-      cameraRef.current?.flyTo([pos.longitude, pos.latitude], 600);
+      pickerCameraRef.current?.setCamera({
+        centerCoordinate: [pos.longitude, pos.latitude],
+        zoomLevel: 14,
+        heading: 0,
+        animationDuration: 600,
+      });
     } catch (e) {
       Alert.alert('خطا', 'دریافت موقعیت فعلی ناموفق بود — روی نقشه انتخاب کنید');
     }
   }, []);
 
-  const handleMapPress = useCallback((feature: any) => {
-    const c = feature?.geometry?.coordinates;
-    if (Array.isArray(c) && c.length >= 2) {
-      setCoord({ longitude: c[0], latitude: c[1] });
-    }
+  const handleMapPress = useCallback((longitude: number, latitude: number) => {
+    setCoord({ latitude, longitude });
   }, []);
 
   const handleSave = async () => {
@@ -178,37 +271,12 @@ const AddQuestScreen = ({ navigation, route }: any) => {
       />
 
       <Text style={styles.label}>موقعیت روی نقشه (برای انتخاب، روی نقشه بزنید)</Text>
-      <View style={styles.mapBox}>
-        <MapLibreRN.MapView
-          style={StyleSheet.absoluteFill}
-          mapStyle={mapStyle8bit}
-          onPress={handleMapPress}
-          compassEnabled={false}
-          logoEnabled={false}
-          attributionEnabled>
-          <MapLibreRN.Camera
-            centerCoordinate={[DEFAULT_LONGITUDE, DEFAULT_LATITUDE]}
-            zoomLevel={14}
-            animationDuration={0}
-            ref={(r: MapLibreRN.CameraRef | null) => {
-              cameraRef.current = r;
-            }}
-          />
-          <MapLibreRN.ShapeSource id="radiusPreview" shape={previewShape}>
-            <MapLibreRN.CircleLayer id="preview-fill" style={PREVIEW_FILL_STYLE} />
-            <MapLibreRN.CircleLayer
-              id="preview-edge"
-              aboveLayerID="preview-fill"
-              style={PREVIEW_EDGE_STYLE}
-            />
-          </MapLibreRN.ShapeSource>
-          <MapLibreRN.PointAnnotation
-            id="picked"
-            coordinate={[coord.longitude, coord.latitude]}>
-            <PixelMarker active />
-          </MapLibreRN.PointAnnotation>
-        </MapLibreRN.MapView>
-      </View>
+      <MapPicker
+        coord={coord}
+        radius={Number.isFinite(radiusN) ? radiusN : 0}
+        onPress={handleMapPress}
+        cameraRef={pickerCameraRef}
+      />
 
       <View style={styles.radiusRow}>
         <View style={styles.radiusField}>
