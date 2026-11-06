@@ -3,6 +3,7 @@ import {
   Alert,
   FlatList,
   Modal,
+  Share,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -21,6 +22,7 @@ import {
 } from '../services/rewardService';
 import { removeQuestGeofence, syncGeofences } from '../services/locationService';
 import { useGame } from '../state/GameContext';
+import { buildHistoryCsv } from '../utils/csv';
 import { COINS_PER_QUEST, XP_PER_QUEST } from '../utils/constants';
 import { Quest, QuestHistoryEntry } from '../types';
 
@@ -94,6 +96,22 @@ const QuestsTab = ({ navigation, onChanged }: Props) => {
     setSelected(null);
   };
 
+  /** Share quest_history as CSV (Could-have #3) — no extra permissions. */
+  const handleExportCsv = useCallback(async () => {
+    if (history.length === 0) {
+      Alert.alert('تاریخچه خالی است', 'هنوز کوئستی تکمیل نشده تا خروجی گرفته شود.');
+      return;
+    }
+    try {
+      await Share.share({
+        title: 'MontQuest — تاریخچهٔ کوئست‌ها',
+        message: buildHistoryCsv(history),
+      });
+    } catch (e) {
+      Alert.alert('خطا', 'اشتراک‌گذاری خروجی CSV انجام نشد.');
+    }
+  }, [history]);
+
   const renderLive = ({ item }: { item: Quest }) => (
     <TouchableOpacity
       style={styles.row}
@@ -132,7 +150,17 @@ const QuestsTab = ({ navigation, onChanged }: Props) => {
         style={styles.list}
       />
 
-      <Text style={styles.section}>تاریخچهٔ کوئست‌ها ({history.length})</Text>
+      <View style={styles.historyHeader}>
+        <Text style={styles.section}>تاریخچهٔ کوئست‌ها ({history.length})</Text>
+        {history.length > 0 && (
+          <PixelButton
+            title="Export CSV"
+            accessibilityLabel="خروجی گرفتن از تاریخچهٔ کوئست‌ها به‌صورت CSV"
+            style={styles.csvBtn}
+            onPress={handleExportCsv}
+          />
+        )}
+      </View>
       <FlatList
         data={history}
         keyExtractor={(h) => String(h.id)}
@@ -181,6 +209,8 @@ const styles = StyleSheet.create({
     marginTop: 12,
     marginBottom: 4,
   },
+  historyHeader: { flexDirection: 'row-reverse', alignItems: 'center', gap: 6 },
+  csvBtn: { marginVertical: 0, paddingVertical: 6, paddingHorizontal: 10 },
   list: { flex: 1 },
   row: { borderBottomColor: '#333', borderBottomWidth: 1, paddingVertical: 8, marginHorizontal: 12 },
   title: { color: '#0ff', fontFamily: 'monospace', fontSize: 16, fontWeight: 'bold' },
