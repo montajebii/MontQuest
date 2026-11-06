@@ -1,5 +1,5 @@
-import React, { useCallback, useMemo, useRef, useState } from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Alert, Linking, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import MapLibreRN, {
   CircleLayerStyle,
   Expression,
@@ -9,10 +9,15 @@ import MapLibreRN, {
 import type { FeatureCollection, Point } from 'geojson';
 import { useFocusEffect } from '@react-navigation/native';
 import PixelButton from '../components/PixelButton';
+import PixelUserDot from '../components/PixelUserDot';
 import XPBar from '../components/XPBar';
 import QuestsTab from './QuestsTab';
 import { getActiveQuests, getAllQuests } from '../db/quests';
 import { onQuestCompleted } from '../services/rewardService';
+import {
+  getCurrentLocation,
+  getPermissionSummary,
+} from '../services/locationService';
 import mapStyle8bit from '../assets/mapStyle8bit.json';
 import {
   QUEST_MARKER_ACTIVE_PNG,
@@ -142,6 +147,16 @@ const MapScreen = ({ navigation }: any) => {
     setAllQuests(await getAllQuests());
   }, []);
 
+  // On first load, centre the camera on the user instead of the fallback
+  // coordinates (silently keeps the default if no fix is available).
+  useEffect(() => {
+    getCurrentLocation()
+      .then((pos) => {
+        setCameraCfg({ center: [pos.longitude, pos.latitude], zoom: 14 });
+      })
+      .catch(() => {});
+  }, []);
+
   // Reload on focus (e.g. returning from the AddQuest modal) and whenever
   // any quest completes (confirm dialog at App level or manual completion).
   useFocusEffect(
@@ -173,6 +188,28 @@ const MapScreen = ({ navigation }: any) => {
   const handleQuestsChanged = useCallback(() => {
     loadQuests().catch(() => {});
   }, [loadQuests]);
+
+  /** Recenter FAB: permission check → one-shot fix → ease camera to it. */
+  const handleRecenter = useCallback(async () => {
+    try {
+      const summary = await getPermissionSummary();
+      if (summary.location === 'denied' || summary.location === 'unknown') {
+        Alert.alert(
+          'مجوز موقعیت لازم است',
+          'برای دیدن موقعیت خود روی نقشه، دسترسی موقعیت را فعال کنید.',
+          [
+            { text: 'باز کردن تنظیمات', onPress: () => Linking.openSettings() },
+            { text: 'بستن', style: 'cancel' },
+          ],
+        );
+        return;
+      }
+      const pos = await getCurrentLocation();
+      setCameraCfg({ center: [pos.longitude, pos.latitude], zoom: 16 });
+    } catch (e) {
+      Alert.alert('خطا', 'موقعیت فعلی دریافت نشد — GPS را روشن و در فضای باز امتحان کنید.');
+    }
+  }, []);
 
   return (
     <View style={styles.container}>
@@ -246,6 +283,12 @@ const MapScreen = ({ navigation }: any) => {
                   style={QUEST_POINT_STYLE}
                 />
               </MapLibreRN.ShapeSource>
+
+              {/* User position: blinking pixel marker (children replace the
+                  default puck) — last child so it draws on top. */}
+              <MapLibreRN.UserLocation>
+                <PixelUserDot />
+              </MapLibreRN.UserLocation>
             </MapLibreRN.MapView>
             <TouchableOpacity
               style={styles.fab}
@@ -253,6 +296,13 @@ const MapScreen = ({ navigation }: any) => {
               accessibilityRole="button"
               onPress={() => navigation.navigate('AddQuest')}>
               <Text style={styles.fabTxt}>+</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.fab, styles.recenterFab]}
+              accessibilityLabel="رفتن به موقعیت من"
+              accessibilityRole="button"
+              onPress={handleRecenter}>
+              <Text style={[styles.fabTxt, styles.recenterTxt]}>◎</Text>
             </TouchableOpacity>
           </View>
         ) : (
@@ -309,6 +359,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   fabTxt: { color: '#0ff', fontSize: 28, lineHeight: 32, fontWeight: 'bold' },
+  recenterFab: {
+    bottom: 84,
+    borderColor: '#f8d838',
+    shadowColor: '#f8d838',
+  },
+  recenterTxt: { color: '#f8d838', fontSize: 24, lineHeight: 30 },
   tabs: {
     flexDirection: 'row-reverse',
     borderTopWidth: 3,
