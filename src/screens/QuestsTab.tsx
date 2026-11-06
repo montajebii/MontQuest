@@ -189,6 +189,17 @@ const QuestsTab = ({ navigation, onChanged }: Props) => {
               title={`تکمیل دستی (🪙 ${COINS_PER_QUEST} + ${XP_PER_QUEST} XP)`}
               onPress={handleComplete}
             />
+            <PixelButton
+              title="ویرایش"
+              accessibilityLabel="ویرایش عنوان، شرح، موقعیت یا شعاع این کوئست"
+              onPress={() => {
+                const id = selected?.id;
+                setSelected(null);
+                if (id != null) {
+                  navigation.navigate('AddQuest', { questId: id });
+                }
+              }}
+            />
             <PixelButton title="حذف کوئست" onPress={handleDelete} />
             <PixelButton title="بستن" onPress={() => setSelected(null)} />
           </View>

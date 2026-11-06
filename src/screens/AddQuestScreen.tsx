@@ -4,7 +4,7 @@ import MapLibreRN, { Expression, CircleLayerStyle } from '@maplibre/maplibre-rea
 import type { FeatureCollection } from 'geojson';
 import PixelButton from '../components/PixelButton';
 import PixelMarker from '../components/PixelMarker';
-import { addQuest } from '../db/quests';
+import { addQuest, getQuestById, updateQuest } from '../db/quests';
 import {
   getCurrentLocation,
   getDefaultRadiusMeters,
@@ -17,9 +17,11 @@ import {
 import mapStyle8bit from '../assets/mapStyle8bit.json';
 
 /**
- * Add-quest form (spec §4, step 10-6): title, task, location picked on the
- * 8-bit MapLibre map (tap to place the pixel marker), and a geofence radius
- * with a live meter-accurate preview ring.
+ * Add-quest form (spec §4, step 10-6) — also the EDIT form (Could-have #4):
+ * when the route carries `questId`, it prefills from the DB and saves via
+ * `updateQuest`, then re-syncs geofences so the new position/radius takes
+ * effect. Otherwise it creates a new quest. Location is picked on the
+ * 8-bit MapLibre map (tap) with a live meter-accurate radius preview.
  */
 
 // CircleLayer radius is screen-space — same meters trick as MapScreen.
@@ -50,7 +52,10 @@ const PREVIEW_EDGE_STYLE: CircleLayerStyle = {
   circlePitchAlignment: 'map',
 };
 
-const AddQuestScreen = ({ navigation }: any) => {
+const AddQuestScreen = ({ navigation, route }: any) => {
+  const questId: number | undefined = route?.params?.questId;
+  const isEdit = questId != null;
+
   const [title, setTitle] = useState('');
   const [task, setTask] = useState('');
   const [coord, setCoord] = useState({ latitude: DEFAULT_LATITUDE, longitude: DEFAULT_LONGITUDE });
@@ -58,15 +63,33 @@ const AddQuestScreen = ({ navigation }: any) => {
   const cameraRef = useRef<MapLibreRN.CameraRef | null>(null);
 
   useEffect(() => {
+    navigation.setOptions({ title: isEdit ? 'ویرایش کوئست' : 'افزودن کوئست' });
+  }, [isEdit, navigation]);
+
+  useEffect(() => {
     (async () => {
-      setRadius(String(await getDefaultRadiusMeters()));
-      try {
-        const pos = await getCurrentLocation();
-        setCoord(pos);
-        cameraRef.current?.flyTo([pos.longitude, pos.latitude], 600);
-      } catch {}
+      if (isEdit && questId != null) {
+        // Edit mode: prefill from DB and fly the camera to the quest.
+        try {
+          const quest = await getQuestById(questId);
+          if (quest) {
+            setTitle(quest.title);
+            setTask(quest.task);
+            setCoord({ latitude: quest.latitude, longitude: quest.longitude });
+            setRadius(String(quest.radius));
+            cameraRef.current?.flyTo([quest.longitude, quest.latitude], 600);
+          }
+        } catch {}
+      } else {
+        setRadius(String(await getDefaultRadiusMeters()));
+        try {
+          const pos = await getCurrentLocation();
+          setCoord(pos);
+          cameraRef.current?.flyTo([pos.longitude, pos.latitude], 600);
+        } catch {}
+      }
     })();
-  }, []);
+  }, [isEdit, questId]);
 
   const radiusN = parseFloat(radius);
 
@@ -111,18 +134,24 @@ const AddQuestScreen = ({ navigation }: any) => {
       Alert.alert('خطا', 'شعاع باید عددی مثبت باشد');
       return;
     }
+    const fields = {
+      title: title.trim(),
+      task: task.trim(),
+      latitude: coord.latitude,
+      longitude: coord.longitude,
+      radius: radiusN,
+    };
     try {
-      await addQuest({
-        title: title.trim(),
-        task: task.trim(),
-        latitude: coord.latitude,
-        longitude: coord.longitude,
-        radius: radiusN,
-      });
+      if (isEdit && questId != null) {
+        await updateQuest(questId, fields);
+      } else {
+        await addQuest(fields);
+      }
+      // Re-register geofences so the new position/radius takes effect.
       await syncGeofences();
       navigation.goBack();
     } catch (e) {
-      Alert.alert('خطا', 'ذخیره کوئست انجام نشد');
+      Alert.alert('خطا', isEdit ? 'ویرایش کوئست انجام نشد' : 'ذخیره کوئست انجام نشد');
     }
   };
 
@@ -201,8 +230,8 @@ const AddQuestScreen = ({ navigation }: any) => {
       </View>
 
       <PixelButton
-        title="ذخیره"
-        accessibilityLabel="ذخیرهٔ کوئست جدید"
+        title={isEdit ? 'ذخیرهٔ تغییرات' : 'ذخیره'}
+        accessibilityLabel={isEdit ? 'ذخیرهٔ تغییرات کوئست' : 'ذخیرهٔ کوئست جدید'}
         onPress={handleSave}
       />
     </ScrollView>

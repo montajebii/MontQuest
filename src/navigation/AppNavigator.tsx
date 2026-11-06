@@ -11,7 +11,8 @@ import { navigationRef } from './navigationRef';
 export type RootStackParamList = {
   Home: undefined;
   Map: undefined;
-  AddQuest: undefined;
+  /** No params = create mode; questId = edit mode (prefills from DB). */
+  AddQuest: { questId?: number } | undefined;
   Profile: undefined;
   Settings: undefined;
 };

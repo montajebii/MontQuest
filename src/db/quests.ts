@@ -30,6 +30,20 @@ export const getQuestById = async (id: number): Promise<Quest | null> => {
   return result.rows.length ? (result.rows.item(0) as Quest) : null;
 };
 
+/** Edits title/task/position/radius of an existing quest (Could-have #4). */
+export const updateQuest = async (
+  id: number,
+  quest: Omit<Quest, 'id' | 'created_at' | 'status' | 'completed_at'>,
+): Promise<void> => {
+  const db = await getDB();
+  await db.executeSql(
+    `UPDATE quests
+     SET title = ?, task = ?, latitude = ?, longitude = ?, radius = ?
+     WHERE id = ?`,
+    [quest.title, quest.task, quest.latitude, quest.longitude, quest.radius, id],
+  );
+};
+
 export const getQuestHistoryWithTitles = async (): Promise<QuestHistoryEntry[]> => {
   const db = await getDB();
   const [result] = await db.executeSql(
