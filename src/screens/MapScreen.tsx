@@ -1,15 +1,23 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import MapLibreRN, { Expression, CircleLayerStyle } from '@maplibre/maplibre-react-native';
-import type { FeatureCollection } from 'geojson';
+import MapLibreRN, {
+  CircleLayerStyle,
+  Expression,
+  OnPressEvent,
+  SymbolLayerStyle,
+} from '@maplibre/maplibre-react-native';
+import type { FeatureCollection, Point } from 'geojson';
 import { useFocusEffect } from '@react-navigation/native';
 import PixelButton from '../components/PixelButton';
-import PixelMarker from '../components/PixelMarker';
 import XPBar from '../components/XPBar';
 import QuestsTab from './QuestsTab';
 import { getActiveQuests, getAllQuests } from '../db/quests';
 import { onQuestCompleted } from '../services/rewardService';
 import mapStyle8bit from '../assets/mapStyle8bit.json';
+import {
+  QUEST_MARKER_ACTIVE_PNG,
+  QUEST_MARKER_DONE_PNG,
+} from '../assets/questMarkerIcons';
 import {
   DEFAULT_LATITUDE,
   DEFAULT_LONGITUDE,
@@ -18,13 +26,17 @@ import { Quest } from '../types';
 
 /**
  * Play screen (spec §4): TopBar (Coins|Level|XP), 8-bit MapLibre map with
- * quest markers, FAB for adding quests and bottom tabs [Map][Quests].
- * Proximity detection / the nearby dialog live app-wide in
+ * clustered quest markers, FAB for adding quests and bottom tabs
+ * [Map][Quests]. Proximity detection / the nearby dialog live app-wide in
  * `useProximityMonitor` + `NearbyQuestOverlay` — NOT here.
  *
- * MapLibre notes: coordinates are [longitude, latitude]. The 8-bit look
- * comes from src/assets/mapStyle8bit.json (client-side style JSON on top
- * of OpenFreeMap's free vector tiles — no API key anywhere).
+ * Markers are GL-rendered (ShapeSource + SymbolLayer + Images, audit
+ * F2.1): one platform-view-free layer scales to hundreds of quests, and
+ * nearby quests cluster with a count at low zooms. Pixel icons are 16×16
+ * PNG data URIs (src/assets/questMarkerIcons.ts).
+ *
+ * MapLibre notes: coordinates are [longitude, latitude]. Geofence rings
+ * are meter-accurate via per-quest radius precomputed at zoom 0/22.
  */
 
 // MapLibre circleRadius is screen-space; to draw the geofence radius in
@@ -51,6 +63,15 @@ const buildGeofenceShape = (quests: Quest[]): FeatureCollection => ({
   }),
 });
 
+const buildMarkerShape = (quests: Quest[]): FeatureCollection => ({
+  type: 'FeatureCollection',
+  features: quests.map((q) => ({
+    type: 'Feature',
+    geometry: { type: 'Point', coordinates: [q.longitude, q.latitude] },
+    properties: { id: q.id, status: q.status },
+  })),
+});
+
 const radiusExpr = (key: string, edgeKey: string): Expression => [
   'interpolate',
   ['exponential', 2],
@@ -74,11 +95,47 @@ const GEOFENCE_EDGE_STYLE: CircleLayerStyle = {
   circleOpacity: 0.9,
   circlePitchAlignment: 'map',
 };
+const CLUSTER_CIRCLE_STYLE: CircleLayerStyle = {
+  circleRadius: 14,
+  circleColor: '#2fbf3f',
+  circleStrokeWidth: 3,
+  circleStrokeColor: '#0b0b12',
+};
+const CLUSTER_COUNT_STYLE: SymbolLayerStyle = {
+  textField: ['get', 'point_count_abbreviated'],
+  textFont: ['Noto Sans Bold'],
+  textSize: 12,
+  textColor: '#0b0b12',
+};
+const QUEST_POINT_STYLE: SymbolLayerStyle = {
+  iconImage: [
+    'match',
+    ['get', 'status'],
+    'active',
+    'quest-marker-active',
+    'quest-marker-done',
+  ],
+  iconAllowOverlap: true,
+  iconSize: 1,
+};
+const CLUSTER_FILTER: Expression = ['has', 'point_count'];
+const UNCLUSTERED_FILTER: Expression = ['!', ['has', 'point_count']];
+
+interface CameraConfig {
+  center: [number, number];
+  zoom: number;
+}
 
 const MapScreen = ({ navigation }: any) => {
   const [tab, setTab] = useState<'map' | 'quests'>('map');
   const [activeQuests, setActiveQuests] = useState<Quest[]>([]);
   const [allQuests, setAllQuests] = useState<Quest[]>([]);
+  const [cameraCfg, setCameraCfg] = useState<CameraConfig>({
+    center: [DEFAULT_LONGITUDE, DEFAULT_LATITUDE],
+    zoom: 14,
+  });
+
+  const mapRef = useRef<MapLibreRN.MapViewRef | null>(null);
 
   const loadQuests = useCallback(async () => {
     setActiveQuests(await getActiveQuests());
@@ -97,6 +154,21 @@ const MapScreen = ({ navigation }: any) => {
   );
 
   const geofenceShape = useMemo(() => buildGeofenceShape(activeQuests), [activeQuests]);
+  const markerShape = useMemo(() => buildMarkerShape(allQuests), [allQuests]);
+
+  // Cluster tap → zoom in towards the cluster's location (audit R2.2).
+  const handleMarkersPress = useCallback(async (event: OnPressEvent) => {
+    const feature = event.features?.[0];
+    if (!feature?.properties?.cluster) {return;}
+    const geometry = feature.geometry as Point;
+    const coords = geometry?.coordinates;
+    if (!Array.isArray(coords) || coords.length < 2) {return;}
+    const currentZoom = (await mapRef.current?.getZoom()) ?? 12;
+    setCameraCfg({
+      center: [coords[0], coords[1]],
+      zoom: Math.min(currentZoom + 2, 17),
+    });
+  }, []);
 
   const handleQuestsChanged = useCallback(() => {
     loadQuests().catch(() => {});
@@ -119,17 +191,25 @@ const MapScreen = ({ navigation }: any) => {
         {tab === 'map' ? (
           <View style={styles.mapWrap}>
             <MapLibreRN.MapView
+              ref={mapRef}
               style={StyleSheet.absoluteFill}
               mapStyle={mapStyle8bit}
               compassEnabled={false}
               logoEnabled={false}
               attributionEnabled>
               <MapLibreRN.Camera
-                centerCoordinate={[DEFAULT_LONGITUDE, DEFAULT_LATITUDE]}
-                zoomLevel={14}
-                animationDuration={0}
+                centerCoordinate={cameraCfg.center}
+                zoomLevel={cameraCfg.zoom}
+                animationMode="easeTo"
+                animationDuration={400}
               />
               <MapLibreRN.UserLocation />
+              <MapLibreRN.Images
+                images={{
+                  'quest-marker-active': QUEST_MARKER_ACTIVE_PNG,
+                  'quest-marker-done': QUEST_MARKER_DONE_PNG,
+                }}
+              />
 
               {/* Geofence radius rings for active quests (meters-accurate) */}
               <MapLibreRN.ShapeSource id="geofences" shape={geofenceShape}>
@@ -141,21 +221,36 @@ const MapScreen = ({ navigation }: any) => {
                 />
               </MapLibreRN.ShapeSource>
 
-              {/* Pixel square markers: green = active, gray = completed */}
-              {allQuests.map((q) => (
-                <MapLibreRN.PointAnnotation
-                  key={String(q.id)}
-                  id={`quest-${q.id}`}
-                  coordinate={[q.longitude, q.latitude]}
-                  title={q.title}
-                  onSelected={() => undefined}>
-                  <PixelMarker active={q.status === 'active'} />
-                </MapLibreRN.PointAnnotation>
-              ))}
+              {/* GL-rendered quest markers, clustered at low zooms (F2.1) */}
+              <MapLibreRN.ShapeSource
+                id="quest-markers"
+                shape={markerShape}
+                cluster
+                clusterRadius={40}
+                clusterMaxZoomLevel={14}
+                onPress={handleMarkersPress}>
+                <MapLibreRN.CircleLayer
+                  id="quest-clusters"
+                  filter={CLUSTER_FILTER}
+                  style={CLUSTER_CIRCLE_STYLE}
+                />
+                <MapLibreRN.SymbolLayer
+                  id="quest-cluster-count"
+                  filter={CLUSTER_FILTER}
+                  aboveLayerID="quest-clusters"
+                  style={CLUSTER_COUNT_STYLE}
+                />
+                <MapLibreRN.SymbolLayer
+                  id="quest-points"
+                  filter={UNCLUSTERED_FILTER}
+                  style={QUEST_POINT_STYLE}
+                />
+              </MapLibreRN.ShapeSource>
             </MapLibreRN.MapView>
             <TouchableOpacity
               style={styles.fab}
               accessibilityLabel="افزودن کوئست"
+              accessibilityRole="button"
               onPress={() => navigation.navigate('AddQuest')}>
               <Text style={styles.fabTxt}>+</Text>
             </TouchableOpacity>
@@ -168,11 +263,17 @@ const MapScreen = ({ navigation }: any) => {
       <View style={styles.tabs}>
         <TouchableOpacity
           style={[styles.tabBtn, tab === 'map' && styles.tabActive]}
+          accessibilityRole="tab"
+          accessibilityLabel="نمایش نقشه"
+          accessibilityState={{ selected: tab === 'map' }}
           onPress={() => setTab('map')}>
           <Text style={[styles.tabTxt, tab === 'map' && styles.tabTxtActive]}>نقشه</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.tabBtn, tab === 'quests' && styles.tabActive]}
+          accessibilityRole="tab"
+          accessibilityLabel="نمایش فهرست کوئست‌ها"
+          accessibilityState={{ selected: tab === 'quests' }}
           onPress={() => setTab('quests')}>
           <Text style={[styles.tabTxt, tab === 'quests' && styles.tabTxtActive]}>
             کوئست‌ها

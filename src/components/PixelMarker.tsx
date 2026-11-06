@@ -6,7 +6,11 @@ import { StyleSheet, View } from 'react-native';
  * Square + hard 2px border keeps the 8-bit look (no rounded pins).
  */
 const PixelMarker: React.FC<{ active: boolean }> = ({ active }) => (
-  <View style={[styles.marker, active ? styles.active : styles.done]} />
+  <View
+    style={[styles.marker, active ? styles.active : styles.done]}
+    importantForAccessibility="no-hide-descendants"
+    accessibilityElementsHidden
+  />
 );
 
 const styles = StyleSheet.create({

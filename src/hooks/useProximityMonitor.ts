@@ -51,6 +51,9 @@ export const useProximityMonitor = (): NearbyQuestState => {
   const confirmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const checkRef = useRef<() => Promise<void>>(async () => {});
   const nearbyQuestRef = useRef<Quest | null>(null);
+  // Mirrors isDialogVisible synchronously so triggerNearby can refuse to
+  // switch the open dialog to a different quest (audit F1.3).
+  const dialogOpenRef = useRef(false);
 
   useEffect(() => {
     nearbyQuestRef.current = nearbyQuest;
@@ -59,6 +62,7 @@ export const useProximityMonitor = (): NearbyQuestState => {
   const closeNearbyUi = useCallback(() => {
     if (confirmTimerRef.current) {clearTimeout(confirmTimerRef.current);}
     confirmTimerRef.current = null;
+    dialogOpenRef.current = false;
     setNearbyQuest(null);
     setIsDialogVisible(false);
     setConfirmEnabled(false);
@@ -67,9 +71,13 @@ export const useProximityMonitor = (): NearbyQuestState => {
 
   /** IDLE → NEARBY_PROMPT: edge flash + dialog, confirm delayed 2s. */
   const triggerNearby = useCallback((quest: Quest) => {
+    // A dialog already on screen must not silently switch to another quest
+    // (audit F1.3) — the new quest is picked up after this one is resolved.
+    if (dialogOpenRef.current) {return;}
     const now = Date.now();
     if (now - lastPromptRef.current < COOLDOWN_MS) {return;} // AC-14
     lastPromptRef.current = now;
+    dialogOpenRef.current = true;
     setNearbyQuest(quest);
     setIsDialogVisible(true);
     setConfirmEnabled(false); // AC-06: no accidental confirm

@@ -132,10 +132,21 @@ const AddQuestScreen = ({ navigation }: any) => {
       contentContainerStyle={styles.content}
       keyboardShouldPersistTaps="handled">
       <Text style={styles.label}>عنوان</Text>
-      <TextInput style={styles.input} value={title} onChangeText={setTitle} />
+      <TextInput
+        style={styles.input}
+        value={title}
+        onChangeText={setTitle}
+        accessibilityLabel="عنوان کوئست"
+      />
 
       <Text style={styles.label}>شرح کار</Text>
-      <TextInput style={styles.input} value={task} onChangeText={setTask} multiline />
+      <TextInput
+        style={styles.input}
+        value={task}
+        onChangeText={setTask}
+        multiline
+        accessibilityLabel="شرح کار کوئست"
+      />
 
       <Text style={styles.label}>موقعیت روی نقشه (برای انتخاب، روی نقشه بزنید)</Text>
       <View style={styles.mapBox}>
@@ -178,12 +189,22 @@ const AddQuestScreen = ({ navigation }: any) => {
             value={radius}
             onChangeText={setRadius}
             keyboardType="numeric"
+            accessibilityLabel="شعاع ژئوفنس به متر"
           />
         </View>
-        <PixelButton title="موقعیت من" onPress={handleUseMyLocation} style={styles.locBtn} />
+        <PixelButton
+          title="موقعیت من"
+          accessibilityLabel="انتخاب موقعیت فعلی من روی نقشه"
+          onPress={handleUseMyLocation}
+          style={styles.locBtn}
+        />
       </View>
 
-      <PixelButton title="ذخیره" onPress={handleSave} />
+      <PixelButton
+        title="ذخیره"
+        accessibilityLabel="ذخیرهٔ کوئست جدید"
+        onPress={handleSave}
+      />
     </ScrollView>
   );
 };

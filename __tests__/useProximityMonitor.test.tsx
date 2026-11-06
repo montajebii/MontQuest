@@ -156,4 +156,50 @@ describe('useProximityMonitor', () => {
 
     act(() => tree.unmount());
   });
+
+  it('does not switch the open dialog to another quest (audit F1.3)', async () => {
+    const questB: Quest = {
+      ...questInside,
+      id: 3,
+      title: 'کوئست B',
+      latitude: 35.7,
+      longitude: 51.4, // ~1.2 km away from questInside
+    };
+    asMock(getActiveQuests).mockResolvedValue([questInside, questB]);
+    setFakePosition(35.6892, 51.389); // inside questInside
+
+    let tree!: renderer.ReactTestRenderer;
+    await act(async () => {
+      tree = renderer.create(<Harness />);
+    });
+    await flush();
+    expect(latest?.nearbyQuest?.id).toBe(1);
+    expect(latest?.isDialogVisible).toBe(true);
+
+    // Walk into quest B's radius while the dialog for A is still open:
+    // the open dialog must NOT silently switch to B.
+    setFakePosition(35.7, 51.4);
+    await act(async () => {
+      jest.advanceTimersByTime(60_000);
+    });
+    await flush();
+    expect(latest?.nearbyQuest?.id).toBe(1);
+    expect(latest?.isDialogVisible).toBe(true);
+
+    // Resolve A ("Not now") → cooldown elapses → B is picked up next check.
+    act(() => {
+      latest?.notNow();
+    });
+    await flush();
+    expect(latest?.isDialogVisible).toBe(false);
+
+    await act(async () => {
+      jest.advanceTimersByTime(2 * 60_000);
+    });
+    await flush();
+    expect(latest?.nearbyQuest?.id).toBe(3);
+    expect(latest?.isDialogVisible).toBe(true);
+
+    act(() => tree.unmount());
+  });
 });

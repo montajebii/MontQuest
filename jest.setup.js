@@ -183,6 +183,7 @@ jest.mock('@maplibre/maplibre-react-native', () => {
     LineLayer: make,
     SymbolLayer: make,
     BackgroundLayer: make,
+    Images: make,
     UserLocation: make,
     UserLocationRenderMode: { Native: 'native', Normal: 'normal' },
     UserTrackingMode: { Follow: 'normal', Compass: 'compass' },

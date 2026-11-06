@@ -29,10 +29,23 @@ const NearbyQuestOverlay = () => {
         onRequestClose={notNow}>
         <View style={styles.backdrop}>
           <View style={styles.dialog}>
-            <Text style={styles.dialogTitle}>{nearbyQuest?.title}</Text>
+            <Text
+              style={styles.dialogTitle}
+              accessibilityLiveRegion="polite">
+              {nearbyQuest?.title}
+            </Text>
             <Text style={styles.dialogText}>آیا کار این کوئست را انجام دادید؟</Text>
-            <PixelButton title="تأیید" disabled={!confirmEnabled} onPress={confirm} />
-            <PixelButton title="فعلاً نه" onPress={notNow} />
+            <PixelButton
+              title="تأیید"
+              accessibilityLabel="تأیید انجام کوئست و دریافت جایزه"
+              disabled={!confirmEnabled}
+              onPress={confirm}
+            />
+            <PixelButton
+              title="فعلاً نه"
+              accessibilityLabel="رد کردن کوئست، یادآوری بعد از دو دقیقه"
+              onPress={notNow}
+            />
           </View>
         </View>
       </Modal>

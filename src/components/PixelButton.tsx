@@ -6,11 +6,23 @@ interface Props {
   onPress?: () => void;
   disabled?: boolean;
   style?: ViewStyle;
+  /** Optional explicit label for screen readers; defaults to `title`. */
+  accessibilityLabel?: string;
 }
 
-const PixelButton: React.FC<Props> = ({ title, onPress, disabled, style }) => (
+const PixelButton: React.FC<Props> = ({
+  title,
+  onPress,
+  disabled,
+  style,
+  accessibilityLabel,
+}) => (
   <Pressable
     onPress={disabled ? undefined : onPress}
+    disabled={disabled}
+    accessibilityRole="button"
+    accessibilityLabel={accessibilityLabel ?? title}
+    accessibilityState={{ disabled: !!disabled }}
     style={[styles.btn, disabled && styles.disabled, style]}>
     <Text style={styles.label}>{title}</Text>
   </Pressable>

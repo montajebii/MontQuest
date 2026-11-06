@@ -95,7 +95,11 @@ const QuestsTab = ({ navigation, onChanged }: Props) => {
   };
 
   const renderLive = ({ item }: { item: Quest }) => (
-    <TouchableOpacity style={styles.row} onPress={() => setSelected(item)}>
+    <TouchableOpacity
+      style={styles.row}
+      accessibilityRole="button"
+      accessibilityLabel={`کوئست ${item.title} — مشاهدهٔ جزئیات`}
+      onPress={() => setSelected(item)}>
       <Text style={styles.title}>⭕ {item.title}</Text>
       <Text style={styles.meta}>{item.task}</Text>
       <Text style={styles.metaSmall}>
