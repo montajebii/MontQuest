@@ -84,9 +84,6 @@ export const stopTracking = async (): Promise<void> => {
   await BackgroundGeolocation.stop();
 };
 
-export const getTrackingState = async (): Promise<State> =>
-  BackgroundGeolocation.getState();
-
 // ── geofences ──────────────────────────────────────────────────────
 
 /** Re-registers a geofence for every active quest (one per quest). */

@@ -55,12 +55,6 @@ export const getQuestHistoryWithTitles = async (): Promise<QuestHistoryEntry[]> 
   return result.rows.raw() as QuestHistoryEntry[];
 };
 
-export const markQuestCompleted = async (id: number) => {
-  const db = await getDB();
-  const now = Date.now();
-  await db.executeSql('UPDATE quests SET status = \'completed\', completed_at = ? WHERE id = ?', [now, id]);
-};
-
 export const deleteQuest = async (id: number) => {
   const db = await getDB();
   await db.executeSql('DELETE FROM quests WHERE id = ?', [id]);
