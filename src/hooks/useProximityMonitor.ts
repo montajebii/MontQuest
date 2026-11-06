@@ -3,6 +3,7 @@ import { AppState } from 'react-native';
 import BackgroundGeolocation from 'react-native-background-geolocation';
 import { getActiveQuests, getQuestById } from '../db/quests';
 import { completeQuestAndReward, onQuestCompleted } from '../services/rewardService';
+import { playSfx } from '../services/soundService';
 import {
   getCurrentLocation,
   getCheckIntervalMinutes,
@@ -82,6 +83,7 @@ export const useProximityMonitor = (): NearbyQuestState => {
     setIsDialogVisible(true);
     setConfirmEnabled(false); // AC-06: no accidental confirm
     setEdgeFlash(true);
+    playSfx('nearby').catch(() => {}); // Could-have #1
     confirmTimerRef.current = setTimeout(
       () => setConfirmEnabled(true),
       MIN_CONFIRM_DELAY_MS,

@@ -167,6 +167,48 @@ jest.mock('@notifee/react-native', () => {
   return { __esModule: true, default: api, ...api };
 });
 
+jest.mock('react-native-sound', () => {
+  const instances = [];
+  class MockSound {
+    constructor(name, base, cb) {
+      this._name = name;
+      this._loaded = true;
+      this.playCalls = 0;
+      instances.push(this);
+      if (typeof cb === 'function') {
+        setImmediate(cb, null);
+      }
+    }
+    isLoaded() {
+      return this._loaded;
+    }
+    play() {
+      this.playCalls += 1;
+      return this;
+    }
+    stop() {
+      return this;
+    }
+    setCurrentTime() {
+      return this;
+    }
+    release() {
+      return this;
+    }
+  }
+  MockSound.MAIN_BUNDLE = 'bundle';
+  MockSound.DOCUMENT = 'document';
+  MockSound.setCategory = jest.fn();
+  MockSound._instances = instances;
+  return {
+    __esModule: true,
+    default: MockSound,
+    MAIN_BUNDLE: 'bundle',
+    DOCUMENT: 'document',
+    setCategory: MockSound.setCategory,
+  };
+});
+
 jest.mock('@maplibre/maplibre-react-native', () => {
   const React = require('react');
   const { View } = require('react-native');

@@ -2,6 +2,7 @@
 export const SETTING_CHECK_INTERVAL_MINUTES = 'check_interval_minutes';
 export const SETTING_DEFAULT_RADIUS_METERS = 'default_radius_meters';
 export const SETTING_TRACKING_ENABLED = 'tracking_enabled';
+export const SETTING_SOUND_ENABLED = 'sound_enabled';
 
 // ── Game rules (spec §2) ──────────────────────────────────────────
 export const XP_PER_QUEST = 25;

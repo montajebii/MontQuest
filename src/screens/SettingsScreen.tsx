@@ -14,6 +14,11 @@ import {
   stopTracking,
 } from '../services/locationService';
 import {
+  isSoundEnabled,
+  playSfx,
+  setSoundEnabled,
+} from '../services/soundService';
+import {
   DEFAULT_GEOFENCE_RADIUS_M,
   DEFAULT_TRACKING_INTERVAL_MINUTES,
   SETTING_CHECK_INTERVAL_MINUTES,
@@ -39,12 +44,14 @@ const SettingsScreen = () => {
   );
   const [radius, setRadiusValue] = useState(String(DEFAULT_GEOFENCE_RADIUS_M));
   const [trackingEnabled, setTrackingEnabled] = useState(true);
+  const [soundOn, setSoundOn] = useState(true);
   const [summary, setSummary] = useState<PermissionSummary | null>(null);
 
   const reload = useCallback(async () => {
     setIntervalValue(String(await getCheckIntervalMinutes()));
     setRadiusValue(String(await getDefaultRadiusMeters()));
     setTrackingEnabled(await isTrackingEnabled());
+    setSoundOn(await isSoundEnabled());
     setSummary(await getPermissionSummary());
   }, []);
 
@@ -87,6 +94,19 @@ const SettingsScreen = () => {
       setSummary(await getPermissionSummary());
     } catch (e) {
       Alert.alert('خطا', 'تغییر وضعیت ردیابی ناموفق بود.');
+    }
+  };
+
+  const handleToggleSound = async () => {
+    const next = !soundOn;
+    try {
+      await setSoundEnabled(next);
+      setSoundOn(next);
+      if (next) {
+        playSfx('reward').catch(() => {}); // instant audible feedback
+      }
+    } catch (e) {
+      Alert.alert('خطا', 'تغییر وضعیت صدا ناموفق بود.');
     }
   };
 
@@ -133,6 +153,11 @@ const SettingsScreen = () => {
       <PixelButton
         title={trackingEnabled ? 'ردیابی: روشن (خاموش کن)' : 'ردیابی: خاموش (روشن کن)'}
         onPress={handleToggleTracking}
+      />
+      <PixelButton
+        title={soundOn ? 'صدا: روشن (خاموش کن)' : 'صدا: خاموش (روشن کن)'}
+        accessibilityLabel={soundOn ? 'خاموش کردن افکت‌های صوتی' : 'روشن کردن افکت‌های صوتی'}
+        onPress={handleToggleSound}
       />
       <PixelButton title="درخواست مجوز پس‌زمینه" onPress={handleRequestPermission} />
 

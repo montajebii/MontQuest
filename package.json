@@ -8,6 +8,7 @@
     "lint": "eslint .",
     "start": "react-native start",
     "doctor": "bash scripts/doctor.sh",
+    "gen:sfx": "node scripts/gen-sfx.js",
     "test": "jest"
   },
   "dependencies": {
@@ -22,6 +23,7 @@
     "react-native-background-geolocation": "^5.8.2",
     "react-native-safe-area-context": "^5.11.1",
     "react-native-screens": "^4.4.0",
+    "react-native-sound": "^0.13.0",
     "react-native-sqlite-storage": "^6.0.1"
   },
   "devDependencies": {

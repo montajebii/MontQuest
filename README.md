@@ -28,7 +28,7 @@
 - تب کوئست‌ها: لیست زنده + تاریخچه با عنوان/تاریخ/پاداش؛ جزئیات کوئست با «تکمیل دستی» و «حذف»
 - تنظیمات: بازهٔ بررسی، شعاع پیش‌فرض ژئوفنس، کلید روشن/خاموش ردیابی + نمایش «در حال بررسی/متوقف»، وضعیت مجوزها، راهنمای باتری OEM
 
-**Should-have:** همهٔ موارد ۱ تا ۶ (تنظیمات، وضعیت ردیابی، حذف/تکمیل دستی، راهنمای باتری). **Could-have:** صدا، آواتار، CSV و ویرایش کوئست عمداً پیاده نشده‌اند (خارج از MVP).
+**Should-have:** همهٔ موارد ۱ تا ۶ (تنظیمات، وضعیت ردیابی، حذف/تکمیل دستی، راهنمای باتری). **Could-have:** افکت‌های صوتی 8-bit (سه صدای chiptune تولیدشده با `scripts/gen-sfx.js` — نزدیکی/پاداش/لول‌آپ، با سوییچ `sound_enabled` در تنظیمات) پیاده شده؛ آواتار پیکسلی، خروجی CSV و ویرایش کوئست هنوز خارج از MVP.
 
 ## ساختار پروژه
 
@@ -126,7 +126,7 @@ npx eslint src App.tsx index.js __tests__
 - `quests(id, title, task, latitude, longitude, radius, status, created_at, completed_at)` — status: `active`/`completed`
 - `user_profile(id=1, coins, level, current_xp, total_xp)`
 - `quest_history(id, quest_id → quests.id, completed_at, coins_awarded, xp_awarded)`
-- `settings(key, value)` — کلیدها: `check_interval_minutes`، `default_radius_meters`، `tracking_enabled`
+- `settings(key, value)` — کلیدها: `check_interval_minutes`، `default_radius_meters`، `tracking_enabled`، `sound_enabled`
 
 **ماشین حالت نزدیکی (بخش ۶):** `IDLE` → (ورود ژئوفنس یا چک دوره‌ای) → `NEARBY_PROMPT` (فلش + نوتیفیکیشن + دیالوگ) → تأیید → پاداش → `IDLE`؛ «فعلاً نه» → cooldown ۲ دقیقه → `IDLE`؛ Exit → `STOPPED`؛ بازگشت + ردیابی فعال → `IDLE`.
 

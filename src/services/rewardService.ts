@@ -1,5 +1,6 @@
 import { getDB } from '../db/database';
 import { applyXP } from '../utils/leveling';
+import { playSfx } from './soundService';
 import { XP_PER_QUEST, COINS_PER_QUEST } from '../utils/constants';
 
 /**
@@ -58,6 +59,7 @@ export const completeQuestAndReward = async (questId: number) => {
 
     await db.executeSql('COMMIT');
     completionListeners.forEach((cb) => cb(questId));
+    playSfx('reward').catch(() => {}); // Could-have #1
     return newState;
   } catch (e) {
     await db.executeSql('ROLLBACK');

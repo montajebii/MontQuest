@@ -42,6 +42,7 @@
 - ☐ در Xcode → Signing & Capabilities → **Background Modes** فعال و **Location updates** تیک‌خورده باشد (`UIBackgroundModes = [location]` از قبل در Info.plist هست).
 - ☐ Usage descriptions پر و معنادار باشند (`NSLocationWhenInUseUsageDescription`, `NSLocationAlwaysAndWhenInUseUsageDescription`, `NSLocationAlwaysUsageDescription`, `NSUserNotificationUsageDescription`).
 - ☐ **PrivacyInfo.xcprivacy** بازبینی شود: نوع دادهٔ `NSPrivacyCollectedDataTypeLocation` باید `NSPrivacyCollectedDataTypePurposeAppFunctionality` و `NotLinked` باشد (داده فقط محلی است؛ هیچ ارسال شبکه‌ای وجود ندارد).
+- ☐ **افکت‌های صوتی iOS:** پوشهٔ `ios/MontQuest/Sounds/` (سه فایل WAV تولیدشده با `npm run gen:sfx`) را یک‌بار در Xcode به target مونت‌کوئست drag کنید (برای Android خودکار از `res/raw` لود می‌شود).
 - ☐ `pod install` بعد از هر تغییر native.
 - ☐ نسخه (`MARKETING_VERSION` / `CURRENT_PROJECT_VERSION`) در project.pbxproj.
 
