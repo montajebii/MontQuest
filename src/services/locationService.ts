@@ -4,6 +4,7 @@ import BackgroundGeolocation, {
   State,
 } from 'react-native-background-geolocation';
 import notifee, { AndroidImportance } from '@notifee/react-native';
+import { PermissionsAndroid, Platform } from 'react-native';
 import { getActiveQuests } from '../db/quests';
 import { getSetting } from '../db/settings';
 import {
@@ -151,6 +152,45 @@ export const showNearbyNotification = async (questTitle: string): Promise<void> 
 };
 
 // ── permissions ────────────────────────────────────────────────────
+
+/**
+ * Runtime `ACCESS_FINE_LOCATION` request via RN PermissionsAndroid —
+ * required before MapLibre's UserLocation or a one-shot fix will work
+ * on a real device (the BG-geolocation SDK's own request isn't always
+ * surfaced the same way).
+ */
+export const ensureForegroundLocationPermission = async (): Promise<boolean> => {
+  if (Platform.OS !== 'android') {return true;}
+  try {
+    const already = await PermissionsAndroid.check(
+      PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+    );
+    if (already) {return true;}
+    const result = await PermissionsAndroid.request(
+      PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+      {
+        title: 'مجوز موقعیت',
+        message:
+          'MontQuest برای نمایش موقعیت شما روی نقشه و اطلاع‌رسانی کوئست‌های نزدیک به مجوز موقعیت دقیق نیاز دارد.',
+        buttonPositive: 'اجازه می‌دهم',
+        buttonNegative: 'بعداً',
+      },
+    );
+    return result === PermissionsAndroid.RESULTS.GRANTED;
+  } catch {
+    return false;
+  }
+};
+
+/** Whether the OS location service (GPS) is switched on at all. */
+export const isGpsEnabled = async (): Promise<boolean> => {
+  try {
+    const provider = await BackgroundGeolocation.getProviderState();
+    return !!(provider.enabled && provider.gps);
+  } catch {
+    return true; // can't tell — don't block the flow
+  }
+};
 
 export interface PermissionSummary {
   location: 'always' | 'when_in_use' | 'denied' | 'unknown';

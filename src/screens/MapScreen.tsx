@@ -1,5 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Linking, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import {
+  Alert,
+  Image,
+  Linking,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import MapLibreRN, {
   CircleLayerStyle,
   Expression,
@@ -10,19 +18,24 @@ import type { FeatureCollection, Point } from 'geojson';
 import { useFocusEffect } from '@react-navigation/native';
 import PixelButton from '../components/PixelButton';
 import PixelUserDot from '../components/PixelUserDot';
+import MapSearch from '../components/MapSearch';
 import XPBar from '../components/XPBar';
 import QuestsTab from './QuestsTab';
 import { getActiveQuests, getAllQuests } from '../db/quests';
 import { onQuestCompleted } from '../services/rewardService';
 import {
+  ensureForegroundLocationPermission,
   getCurrentLocation,
-  getPermissionSummary,
+  isGpsEnabled,
 } from '../services/locationService';
+import { fetchNearbyPois } from '../services/poiService';
 import mapStyle8bit from '../assets/mapStyle8bit.json';
 import {
   QUEST_MARKER_ACTIVE_PNG,
   QUEST_MARKER_DONE_PNG,
 } from '../assets/questMarkerIcons';
+import { POI_ICONS } from '../assets/poiIcons';
+import { CRT_SCANLINES_PNG } from '../assets/crtScanlines';
 import {
   DEFAULT_LATITUDE,
   DEFAULT_LONGITUDE,
@@ -123,12 +136,29 @@ const QUEST_POINT_STYLE: SymbolLayerStyle = {
   iconAllowOverlap: true,
   iconSize: 1,
 };
+const POI_ICON_EXPR: Expression = [
+  'match',
+  ['get', 'poi'],
+  'coffee',
+  'poi-coffee',
+  'food',
+  'poi-food',
+  'poi-tree',
+];
+const POI_POINT_STYLE: SymbolLayerStyle = {
+  iconImage: POI_ICON_EXPR,
+  iconAllowOverlap: false,
+  iconSize: 1,
+};
 const CLUSTER_FILTER: Expression = ['has', 'point_count'];
 const UNCLUSTERED_FILTER: Expression = ['!', ['has', 'point_count']];
+
+const EMPTY_POI_SHAPE: FeatureCollection = { type: 'FeatureCollection', features: [] };
 
 interface CameraConfig {
   center: [number, number];
   zoom: number;
+  heading: number;
 }
 
 const MapScreen = ({ navigation }: any) => {
@@ -138,7 +168,11 @@ const MapScreen = ({ navigation }: any) => {
   const [cameraCfg, setCameraCfg] = useState<CameraConfig>({
     center: [DEFAULT_LONGITUDE, DEFAULT_LATITUDE],
     zoom: 14,
+    heading: 0,
   });
+  const [locationAllowed, setLocationAllowed] = useState(false);
+  const [mapHeading, setMapHeading] = useState(0);
+  const [pois, setPois] = useState<FeatureCollection | null>(null);
 
   const mapRef = useRef<MapLibreRN.MapViewRef | null>(null);
 
@@ -147,15 +181,30 @@ const MapScreen = ({ navigation }: any) => {
     setAllQuests(await getAllQuests());
   }, []);
 
-  // On first load, centre the camera on the user instead of the fallback
-  // coordinates (silently keeps the default if no fix is available).
-  useEffect(() => {
-    getCurrentLocation()
-      .then((pos) => {
-        setCameraCfg({ center: [pos.longitude, pos.latitude], zoom: 14 });
-      })
-      .catch(() => {});
+  const loadPois = useCallback(async (latitude: number, longitude: number) => {
+    try {
+      setPois(await fetchNearbyPois(latitude, longitude));
+    } catch {}
   }, []);
+
+  // First load: runtime permission (PermissionsAndroid) → centre the camera
+  // on the user + pull nearby POIs. Silent fallbacks keep the default view.
+  useEffect(() => {
+    (async () => {
+      const allowed = await ensureForegroundLocationPermission();
+      setLocationAllowed(allowed);
+      if (!allowed) {return;}
+      try {
+        const pos = await getCurrentLocation();
+        setCameraCfg({
+          center: [pos.longitude, pos.latitude],
+          zoom: 14,
+          heading: 0,
+        });
+        loadPois(pos.latitude, pos.longitude);
+      } catch {}
+    })();
+  }, [loadPois]);
 
   // Reload on focus (e.g. returning from the AddQuest modal) and whenever
   // any quest completes (confirm dialog at App level or manual completion).
@@ -182,34 +231,73 @@ const MapScreen = ({ navigation }: any) => {
     setCameraCfg({
       center: [coords[0], coords[1]],
       zoom: Math.min(currentZoom + 2, 17),
+      heading: cameraCfg.heading,
     });
-  }, []);
+  }, [cameraCfg.heading]);
 
   const handleQuestsChanged = useCallback(() => {
     loadQuests().catch(() => {});
   }, [loadQuests]);
 
-  /** Recenter FAB: permission check → one-shot fix → ease camera to it. */
+  /** Recenter FAB: runtime permission → GPS-on check → fix + POI refresh. */
   const handleRecenter = useCallback(async () => {
-    try {
-      const summary = await getPermissionSummary();
-      if (summary.location === 'denied' || summary.location === 'unknown') {
-        Alert.alert(
-          'مجوز موقعیت لازم است',
-          'برای دیدن موقعیت خود روی نقشه، دسترسی موقعیت را فعال کنید.',
-          [
-            { text: 'باز کردن تنظیمات', onPress: () => Linking.openSettings() },
-            { text: 'بستن', style: 'cancel' },
-          ],
-        );
-        return;
-      }
-      const pos = await getCurrentLocation();
-      setCameraCfg({ center: [pos.longitude, pos.latitude], zoom: 16 });
-    } catch (e) {
-      Alert.alert('خطا', 'موقعیت فعلی دریافت نشد — GPS را روشن و در فضای باز امتحان کنید.');
+    const allowed = await ensureForegroundLocationPermission();
+    setLocationAllowed(allowed);
+    if (!allowed) {
+      Alert.alert(
+        'مجوز موقعیت لازم است',
+        'برای دیدن موقعیت خود روی نقشه، دسترسی موقعیت را فعال کنید.',
+        [
+          { text: 'باز کردن تنظیمات', onPress: () => Linking.openSettings() },
+          { text: 'بستن', style: 'cancel' },
+        ],
+      );
+      return;
     }
-  }, []);
+    if (!(await isGpsEnabled())) {
+      Alert.alert(
+        'GPS خاموش است',
+        'سرویس موقعیت دستگاه روشن نیست — آن را از تنظیمات سریع اندروید یا Settings → Location فعال کنید.',
+        [
+          { text: 'باز کردن تنظیمات', onPress: () => Linking.openSettings() },
+          { text: 'بستن', style: 'cancel' },
+        ],
+      );
+      return;
+    }
+    try {
+      const pos = await getCurrentLocation();
+      setCameraCfg({
+        center: [pos.longitude, pos.latitude],
+        zoom: 16,
+        heading: 0,
+      });
+      loadPois(pos.latitude, pos.longitude);
+    } catch (e) {
+      Alert.alert('خطا', 'موقعیت فعلی دریافت نشد — در فضای باز دوباره امتحان کنید.');
+    }
+  }, [loadPois]);
+
+  /** Search hit → fly the camera to the place (zoom 15). */
+  const handleSearchPick = useCallback(
+    (hit: { latitude: number; longitude: number }) => {
+      setCameraCfg({
+        center: [hit.longitude, hit.latitude],
+        zoom: 15,
+        heading: 0,
+      });
+    },
+    [],
+  );
+
+  /** Compass: ease back to north, preserving the user's centre + zoom. */
+  const handleCompass = useCallback(async () => {
+    const center = (await mapRef.current?.getCenter()) ?? cameraCfg.center;
+    const zoom = (await mapRef.current?.getZoom()) ?? cameraCfg.zoom;
+    setCameraCfg({ center: [center[0], center[1]], zoom, heading: 0 });
+  }, [cameraCfg.center, cameraCfg.zoom]);
+
+  const compassVisible = Math.abs(((mapHeading % 360) + 360) % 360) > 5;
 
   return (
     <View style={styles.container}>
@@ -233,18 +321,24 @@ const MapScreen = ({ navigation }: any) => {
               mapStyle={mapStyle8bit}
               compassEnabled={false}
               logoEnabled={false}
-              attributionEnabled>
+              attributionEnabled
+              onRegionDidChange={(feature: { properties?: { heading?: number } }) => {
+                setMapHeading(feature?.properties?.heading ?? 0);
+              }}>
               <MapLibreRN.Camera
                 centerCoordinate={cameraCfg.center}
                 zoomLevel={cameraCfg.zoom}
+                heading={cameraCfg.heading}
                 animationMode="easeTo"
                 animationDuration={400}
               />
-              <MapLibreRN.UserLocation />
               <MapLibreRN.Images
                 images={{
                   'quest-marker-active': QUEST_MARKER_ACTIVE_PNG,
                   'quest-marker-done': QUEST_MARKER_DONE_PNG,
+                  'poi-coffee': POI_ICONS.coffee,
+                  'poi-food': POI_ICONS.food,
+                  'poi-tree': POI_ICONS.tree,
                 }}
               />
 
@@ -284,12 +378,42 @@ const MapScreen = ({ navigation }: any) => {
                 />
               </MapLibreRN.ShapeSource>
 
+              {/* Nearby POIs (Overpass): pixel coffee/food/tree icons */}
+              <MapLibreRN.ShapeSource id="poi-markers" shape={pois ?? EMPTY_POI_SHAPE}>
+                <MapLibreRN.SymbolLayer
+                  id="poi-points"
+                  style={POI_POINT_STYLE}
+                />
+              </MapLibreRN.ShapeSource>
+
               {/* User position: blinking pixel marker (children replace the
                   default puck) — last child so it draws on top. */}
-              <MapLibreRN.UserLocation>
-                <PixelUserDot />
-              </MapLibreRN.UserLocation>
+              {locationAllowed && (
+                <MapLibreRN.UserLocation>
+                  <PixelUserDot />
+                </MapLibreRN.UserLocation>
+              )}
             </MapLibreRN.MapView>
+
+            {/* CRT scanlines for the retro-TV feel */}
+            <View pointerEvents="none" style={styles.crt}>
+              <Image
+                source={{ uri: CRT_SCANLINES_PNG }}
+                style={StyleSheet.absoluteFill}
+                resizeMode="repeat"
+              />
+            </View>
+
+            <MapSearch onPick={handleSearchPick} />
+            {compassVisible && (
+              <TouchableOpacity
+                style={styles.compassBtn}
+                accessibilityRole="button"
+                accessibilityLabel="بازگشت قطب‌نما به شمال"
+                onPress={handleCompass}>
+                <Text style={styles.compassTxt}>↑</Text>
+              </TouchableOpacity>
+            )}
             <TouchableOpacity
               style={styles.fab}
               accessibilityLabel="افزودن کوئست"
@@ -365,6 +489,20 @@ const styles = StyleSheet.create({
     shadowColor: '#f8d838',
   },
   recenterTxt: { color: '#f8d838', fontSize: 24, lineHeight: 30 },
+  crt: { ...StyleSheet.absoluteFillObject, opacity: 0.3 },
+  compassBtn: {
+    position: 'absolute',
+    top: 56,
+    right: 8,
+    width: 40,
+    height: 40,
+    backgroundColor: '#f8f8f8',
+    borderWidth: 2,
+    borderColor: '#0b0b12',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  compassTxt: { color: '#0b0b12', fontSize: 20, fontWeight: 'bold' },
   tabs: {
     flexDirection: 'row-reverse',
     borderTopWidth: 3,
