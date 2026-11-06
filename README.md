@@ -1,79 +1,149 @@
-This is a new [**React Native**](https://reactnative.dev) project, bootstrapped using [`@react-native-community/cli`](https://github.com/react-native-community/cli).
+# MontQuest / منتکوئست
 
-# Getting Started
+اپلیکیشن موبایل Cross-platform (Android + iOS) برای مدیریت کوئست‌های مکانی با رویکرد گیمیفیکیشن و تم 8-bit، پیاده‌شده با React Native + TypeScript. همهٔ داده‌ها **کاملاً محلی و آفلاین** در SQLite ذخیره می‌شوند؛ بدون بک‌اند، حساب کاربری یا همگام‌سازی ابری.
 
->**Note**: Make sure you have completed the [React Native - Environment Setup](https://reactnative.dev/docs/environment-setup) instructions till "Creating a new application" step, before proceeding.
+## پشتهٔ فناوری
 
-## Step 1: Start the Metro Server
+| بخش | کتابخانه |
+|---|---|
+| فریم‌ورک | React Native 0.76 + TypeScript |
+| ژئوفنسینگ / ردیابی پس‌زمینه | `react-native-background-geolocation` v5 (TransistorSoft) |
+| نقشه | `react-native-maps` |
+| نوتیفیکیشن محلی | `@notifee/react-native` |
+| ذخیره‌سازی | `react-native-sqlite-storage` |
 
-First, you will need to start **Metro**, the JavaScript _bundler_ that ships _with_ React Native.
+## قابلیت‌های پیاده‌شده
 
-To start Metro, run the following command from the _root_ of your React Native project:
+**Must-have (بخش ۳ مشخصات):**
+- ثبت کوئست (عنوان، شرح کار، موقعیت روی نقشه، شعاع) در یک Modal
+- نمایش کوئست‌های فعال و قبلی روی نقشه (نشانگر سبز/خاکستری + دایرهٔ شعاع ژئوفنس برای فعال‌ها)
+- بررسی دوره‌ای موقعیت در پیش‌زمینه با بازهٔ قابل تنظیم (تایمر JS + `getCurrentPosition`) — هر بررسی در لاگ ثبت می‌شود
+- ژئوفنسینگ native برای پس‌زمینه؛ یک ژئوفنس به‌ازای هر کوئست فعال (`syncGeofences`)
+- «حالت نزدیکی»: افکت چشمک لبه‌های صفحه + نوتیفیکیشن محلی + دیالوگ تأیید (دکمهٔ تأیید ۲ ثانیه غیرفعال)
+- cooldown حداقلی ۲ دقیقه پس از «فعلاً نه» (و پس از هر تریگر)
+- پاداش در یک تراکنش SQLite: ۱۰ سکه + ۲۵ XP + لول‌آپ با فرمول `100 × level` + ثبت تاریخچه + تکمیل کوئست
+- TopBar سکه/لول/XP، دکمهٔ FAB «+»، دو تب پایین «نقشه» و «کوئست‌ها»
+- Home با Play / Options / Exit؛ Exit = `BackgroundGeolocation.stop()` + رفتن به پس‌زمینه (`moveTaskToBack` روی Android — بدون kill)
+- بازگشت به اپ → شروع مجدد ردیابی با تنظیمات ذخیره‌شده، مگر کاربر آن را خاموش کرده باشد (ماشین حالت STOPPED → IDLE)
+- تب کوئست‌ها: لیست زنده + تاریخچه با عنوان/تاریخ/پاداش؛ جزئیات کوئست با «تکمیل دستی» و «حذف»
+- تنظیمات: بازهٔ بررسی، شعاع پیش‌فرض ژئوفنس، کلید روشن/خاموش ردیابی + نمایش «در حال بررسی/متوقف»، وضعیت مجوزها، راهنمای باتری OEM
 
-```bash
-# using npm
-npm start
+**Should-have:** همهٔ موارد ۱ تا ۶ (تنظیمات، وضعیت ردیابی، حذف/تکمیل دستی، راهنمای باتری). **Could-have:** صدا، آواتار، CSV و ویرایش کوئست عمداً پیاده نشده‌اند (خارج از MVP).
 
-# OR using Yarn
-yarn start
+## ساختار پروژه
+
+```text
+src/
+  components/   PixelButton، XPBar (TopBar)، EdgeFlashOverlay
+  db/           database.ts (اسکیما)، quests.ts، profile.ts، settings.ts
+  navigation/   AppNavigator.tsx (Home / Map / AddQuest-modal / Settings)
+  screens/      HomeScreen، MapScreen، AddQuestScreen، QuestsTab، SettingsScreen
+  services/     locationService.ts (پیکربندی/شروع/توقف/ژئوفنس/نوتیفیکیشن)، rewardService.ts (تراکنش پاداش)
+  state/        GameContext.tsx (init + شروع مجدد ردیابی با AppState)
+  utils/        constants.ts، leveling.ts، geo.ts (haversine)، appLifecycle.ts
+android/.../com/montquest/   + MoveToBackgroundModule.kt (moveTaskToBack برای Exit)
 ```
 
-## Step 2: Start your Application
+## پیش‌نیازها و نصب
 
-Let Metro Bundler run in its _own_ terminal. Open a _new_ terminal from the _root_ of your React Native project. Run the following command to start your _Android_ or _iOS_ app:
-
-### For Android
+- Node.js ≥ 18، Android Studio/SDK (برای Android)، Xcode + CocoaPods (برای iOS روی macOS)
 
 ```bash
-# using npm
-npm run android
-
-# OR using Yarn
-yarn android
+npm install
+cd ios && pod install && cd -   # فقط macOS
 ```
 
-### For iOS
+اجرا:
 
 ```bash
-# using npm
-npm run ios
-
-# OR using Yarn
-yarn ios
+npm run android   # یا: npm run ios
+npm test          # تست‌های jest
 ```
 
-If everything is set up _correctly_, you should see your new app running in your _Android Emulator_ or _iOS Simulator_ shortly provided you have set up your emulator/simulator correctly.
+بررسی کیفیت (هر دو بدون خطا هستند):
 
-This is one way to run your app — you can also run it directly from within Android Studio and Xcode respectively.
+```bash
+npx tsc --noEmit
+npx eslint src index.js __tests__ App.tsx
+```
 
-## Step 3: Modifying your App
+## تنظیمات native ضروری
 
-Now that you have successfully run the app, let's modify it.
+### Android — `android/app/src/main/AndroidManifest.xml`
 
-1. Open `App.tsx` in your text editor of choice and edit some lines.
-2. For **Android**: Press the <kbd>R</kbd> key twice or select **"Reload"** from the **Developer Menu** (<kbd>Ctrl</kbd> + <kbd>M</kbd> (on Window and Linux) or <kbd>Cmd ⌘</kbd> + <kbd>M</kbd> (on macOS)) to see your changes!
+مجوزهای زیر از قبل تعریف‌اند: `ACCESS_FINE_LOCATION`، `ACCESS_COARSE_LOCATION`، `ACCESS_BACKGROUND_LOCATION`، `FOREGROUND_SERVICE`، `FOREGROUND_SERVICE_LOCATION`، `POST_NOTIFICATIONS`، `RECEIVE_BOOT_COMPLETED`.
 
-   For **iOS**: Hit <kbd>Cmd ⌘</kbd> + <kbd>R</kbd> in your iOS Simulator to reload the app and see your changes!
+1. **کلید Google Maps:** مقدار `com.google.android.geo.API_KEY` (که با placeholder `YOUR_GOOGLE_MAPS_API_KEY` گذاشته شده) را با کلید Google Maps Android API خود جایگزین کنید؛ نقشهٔ Android بدون آن خالی می‌ماند.
+2. **لایسنس TransistorSoft برای Release:** نسخهٔ ۵ کتابخانه برای build Release به کلید نیاز دارد (Debug بدون لایسنس کار می‌کند — ریسک بخش ۹ مشخصات):
 
-## Congratulations! :tada:
+```xml
+<meta-data
+  android:name="com.transistorsoft.locationmanager.license"
+  android:value="ANDROID_JWT_LICENSE_KEY" />
+```
 
-You've successfully run and modified your React Native App. :partying_face:
+### iOS — `ios/MontQuest/Info.plist`
 
-### Now what?
+از قبل تعریف‌اند: `NSLocationWhenInUseUsageDescription`، `NSLocationAlwaysAndWhenInUseUsageDescription`، `NSLocationAlwaysUsageDescription` (نسخه‌های قدیمی‌تر)، `NSUserNotificationUsageDescription` و `UIBackgroundModes = [location]`. در Xcode، در Signing & Capabilities قابلیت Background Modes با Location updates فعال باشد. برای Release، کلید `TSLocationManagerLicense` را به Info.plist اضافه کنید.
 
-- If you want to add this new React Native code to an existing application, check out the [Integration guide](https://reactnative.dev/docs/integration-with-existing-apps).
-- If you're curious to learn more about React Native, check out the [Introduction to React Native](https://reactnative.dev/docs/getting-started).
+## رفتار پایش، Exit و محدودیت‌ها
 
-# Troubleshooting
+- **Exit:** `stop()` کامل سرویس + `moveTaskToBack` (Android). اپ kill نمی‌شود. با بازگشت، اگر کلید `tracking_enabled` روشن باشد (پیش‌فرض)، `start()` دوباره اجرا می‌شود؛ خود Exit این کلید را تغییر نمی‌دهد.
+- **پس‌زمینه (Android):** Foreground Service + `stopOnTerminate: false` + `startOnBoot: true`؛ رویداد ژئوفنس در پس‌زمینه از مسیر همان JS زنده (listener در MapScreen) نوتیفیکیشن می‌فرستد؛ در حالت kill‌شده، Headless Task ثبت‌شده در `index.js` نوتیفیکیشن را نمایش می‌دهد.
+- **پس‌زمینه (iOS):** سیستم‌عامل اپ را برای رویداد ژئوفنس wake می‌کند و Headless Task اعلان را می‌فرستد. **Force Kill از App Switcher در iOS تحویل رویداد را تضمین‌نشدنی می‌کند** — محدودیت سیستم‌عامل است و در راهنمای کاربر ذکر شده.
+- **محدودیت‌های OEM:** برخی برندها (شیائومی، سامسونگ، هواوی و…) سرویس پس‌زمینه را می‌کشند؛ راهنمای استثناکردن اپ از بهینه‌سازی باتری در صفحهٔ تنظیمات نمایش داده می‌شود.
+- **Exit در iOS:** اپ نمی‌تواند خودش به پس‌زمینه برود؛ Exit فقط ردیابی را متوقف می‌کند و کاربر با ژست Home خارج می‌شود (مستندشده در کد).
+- **بازهٔ بررسی:** به‌صورت تایمر دوره‌ای در پیش‌زمینه پیاده شده است (`getCurrentPosition` + ارزیابی فاصله در JS) و لاگ `[MontQuest] position check` می‌دهد (AC-03). در پس‌زمینه، تشخیص نزدیکی بر عهدهٔ ژئوفنس native است — این تطبیق سالم این دو سازوکار است، نه `locationUpdateInterval`.
+- **دقت ژئوفنس:** `distanceFilter: 75` و `stopTimeout: 5` برای باتری (بخش ۷). طبق مستندات SDK، شعاع زیر ~۲۰۰ متر در عمل کم‌اتکاتر است؛ مقدار پیش‌فرض ۱۰۰ طبق مشخصات حفظ شده و قابل تنظیم است.
+- **انحراف مستند از مشخصات:** فیلد `setNotificationResponsiveness` در API عمومی v5 این SDK برای React Native وجود ندارد (فقط native Android)؛ بنابراین قابل تنظیم نیست.
+- `geofenceInitialTriggerEntry: true` — اگر کاربر هنگام ثبت کوئست داخل شعاع باشد، رویداد ورود فوراً صادر می‌شود.
 
-If you can't get this to work, see the [Troubleshooting](https://reactnative.dev/docs/troubleshooting) page.
+## حریم خصوصی
 
-# Learn More
+هیچ دادهٔ مکانی به بیرون ارسال نمی‌شود؛ هیچ endpoint، حساب یا همگام‌سازی ابری پیکربندی نشده است. (نمایش کاشی‌های نقشه به سرویس نقشه/اینترنت نیاز دارد.)
 
-To learn more about React Native, take a look at the following resources:
+## مدل داده (SQLite — `montquest.db`)
 
-- [React Native Website](https://reactnative.dev) - learn more about React Native.
-- [Getting Started](https://reactnative.dev/docs/environment-setup) - an **overview** of React Native and how setup your environment.
-- [Learn the Basics](https://reactnative.dev/docs/getting-started) - a **guided tour** of the React Native **basics**.
-- [Blog](https://reactnative.dev/blog) - read the latest official React Native **Blog** posts.
-- [`@facebook/react-native`](https://github.com/facebook/react-native) - the Open Source; GitHub **repository** for React Native.
+- `quests(id, title, task, latitude, longitude, radius, status, created_at, completed_at)` — status: `active`/`completed`
+- `user_profile(id=1, coins, level, current_xp, total_xp)`
+- `quest_history(id, quest_id → quests.id, completed_at, coins_awarded, xp_awarded)`
+- `settings(key, value)` — کلیدها: `check_interval_minutes`، `default_radius_meters`، `tracking_enabled`
+
+**ماشین حالت نزدیکی (بخش ۶):** `IDLE` → (ورود ژئوفنس یا چک دوره‌ای) → `NEARBY_PROMPT` (فلش + نوتیفیکیشن + دیالوگ) → تأیید → پاداش → `IDLE`؛ «فعلاً نه» → cooldown ۲ دقیقه → `IDLE`؛ Exit → `STOPPED`؛ بازگشت + ردیابی فعال → `IDLE`.
+
+## تصمیم‌های پیاده‌سازی
+
+| تصمیم | انتخاب | توضیح |
+|---|---|---|
+| پاداش تکمیل دستی | همان ۱۰ سکه + ۲۵ XP | تأیید کاربر؛ همان تراکنش `completeQuestAndReward` برای سازگاری تاریخچه/اقتصاد |
+| معنای Exit | توقف سرویس + `moveTaskToBack` (بدون kill) | الزام بخش ۲/۷؛ بازگشت → شروع مجدد با تنظیمات |
+| حذف کوئست | فقط برای کوئست‌های فعال (قبل از تکمیل) | مطابق Should-have ۴ |
+| شعاع جدید | فقط روی کوئست‌های جدید اعمال می‌شود | شعاع کوئست‌های ثبت‌شده در DB آنهاست |
+
+## گزارش تست — معیارهای پذیرش (بخش ۸)
+
+تأییدشده با تست واحد/استاتیک در این محیط (بدون شبیه‌ساز/دستگاه):
+
+| AC | وضعیت در این محیط | شرح |
+|---|---|---|
+| AC-07 | ✅ Pass (تست واحد) | `__tests__/rewardService.test.ts` — تراکنش پاداش: UPDATE پروفایل `[15,2,15,115]`، INSERT تاریخچه، COMMIT |
+| AC-08 | ✅ Pass (تست واحد) | `__tests__/leveling.test.ts` — آستانهٔ `100×level`، انتقال باقیمانده، جهش چندلولی |
+| AC-09 | ✅ Pass (تست واحد) | INSERT `quest_history` در تراکنش + کوئری تاریخچه با JOIN عنوان در تب تاریخچه |
+| AC-01..06, AC-10..14 | 🔲 نیازمند دستگاه/شبیه‌ساز | مراحل تست هر یک در زیر |
+
+راهنمای تست روی دستگاه (طبق روش تست بخش ۸):
+- **AC-01/AC-02:** ثبت کوئست با لمس نقشه؛ ورود به شعاع (سفارشی‌سازی موقعیت در emulator) → رویداد `ENTER`.
+- **AC-03:** تغییر بازه به ۱ دقیقه در تنظیمات → مشاهدهٔ لاگ `[MontQuest] position check` در Logcat/کنسول.
+- **AC-04/AC-05:** ورود به ژئوفنس → افکت لبه‌ها + نوتیفیکیشن در foreground و background.
+- **AC-06:** لمس سریع دیالوگ → دکمهٔ تأیید ۲ ثانیه غیرفعال.
+- **AC-10:** background کردن اپ (بدون kill) و حرکت در شبیه‌ساز → رویداد ژئوفنس.
+- **AC-11:** زدن Exit → عدم دریافت رویداد تا بازگشت (کد ردیابی خاموش)؛ بازگشت → شروع مجدد.
+- **AC-12:** kill و بازکردن اپ → کوئست‌ها/سکه/لول/تنظیمات حفظ‌شده (SQLite).
+- **AC-13:** ردکردن مجوز پس‌زمینه → نمایش وضعیت «رد شده» و پیام راهنما در تنظیمات.
+- **AC-14:** «فعلاً نه» → ورود مجدد به شعاع در کمتر از ۲ دقیقه → دیالوگ دوباره باز نمی‌شود.
+
+`npx tsc --noEmit` و `npx eslint` بدون خطا هستند؛ `npm test` شامل ۴ suite و ۱۲ تست پاس است (smoke رندر App + لولینگ + haversine + تراکنش پاداش).
+
+## خارج از محدودهٔ MVP
+
+ویرایش کوئست پس از ثبت، افکت‌های صوتی، آواتار پیکسلی و خروجی CSV — طبق بخش ۹ مشخصات پیاده نشده‌اند.

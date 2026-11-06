@@ -1,10 +1,10 @@
 buildscript {
     ext {
+        ndkVersion = "26.1.10909125"
         buildToolsVersion = "35.0.0"
         minSdkVersion = 24
         compileSdkVersion = 35
         targetSdkVersion = 34
-        ndkVersion = "26.1.10909125"
         kotlinVersion = "1.9.24"
     }
     repositories {
@@ -15,6 +15,22 @@ buildscript {
         classpath("com.android.tools.build:gradle")
         classpath("com.facebook.react:react-native-gradle-plugin")
         classpath("org.jetbrains.kotlin:kotlin-gradle-plugin")
+    }
+}
+
+
+// Enforce minSdkVersion 24 across all subprojects.
+// Uses pluginManager.withPlugin so it does NOT need afterEvaluate,
+// avoiding "Project.afterEvaluate already evaluated" errors.
+subprojects { subproject ->
+    ['com.android.application', 'com.android.library'].each { pluginId ->
+        subproject.pluginManager.withPlugin(pluginId) {
+            subproject.android {
+                defaultConfig {
+                    minSdkVersion 24
+                }
+            }
+        }
     }
 }
 
