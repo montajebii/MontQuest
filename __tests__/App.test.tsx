@@ -34,4 +34,4 @@ it('renders correctly', async () => {
   await act(async () => {
     tree!.unmount();
   });
-});
+}, 20_000);

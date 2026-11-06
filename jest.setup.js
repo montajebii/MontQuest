@@ -167,13 +167,27 @@ jest.mock('@notifee/react-native', () => {
   return { __esModule: true, default: api, ...api };
 });
 
-jest.mock('react-native-maps', () => {
+jest.mock('@maplibre/maplibre-react-native', () => {
   const React = require('react');
   const { View } = require('react-native');
-  const MockMapView = props => React.createElement(View, props, props.children);
-  const MockMarker = props => React.createElement(View, props);
-  const MockCircle = props => React.createElement(View, props);
-  return { __esModule: true, default: MockMapView, Marker: MockMarker, Circle: MockCircle };
+  // Render every MapLibre component as a plain View so children still render.
+  const make = props => React.createElement(View, props, props.children);
+  const MapLibreRN = {
+    MapView: make,
+    Camera: make,
+    PointAnnotation: make,
+    Callout: make,
+    ShapeSource: make,
+    CircleLayer: make,
+    FillLayer: make,
+    LineLayer: make,
+    SymbolLayer: make,
+    BackgroundLayer: make,
+    UserLocation: make,
+    UserLocationRenderMode: { Native: 'native', Normal: 'normal' },
+    UserTrackingMode: { Follow: 'normal', Compass: 'compass' },
+  };
+  return { __esModule: true, default: MapLibreRN, ...MapLibreRN };
 });
 
 jest.mock('react-native-sqlite-storage', () => {

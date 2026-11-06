@@ -8,7 +8,7 @@
 |---|---|
 | فریم‌ورک | React Native 0.76 + TypeScript |
 | ژئوفنسینگ / ردیابی پس‌زمینه | `react-native-background-geolocation` v5 (TransistorSoft) |
-| نقشه | `react-native-maps` |
+| نقشه | `@maplibre/maplibre-react-native` (متن‌باز، بدون API Key) + کاشی‌های رایگان OpenFreeMap |
 | نوتیفیکیشن محلی | `@notifee/react-native` |
 | ذخیره‌سازی | `react-native-sqlite-storage` |
 
@@ -16,7 +16,7 @@
 
 **Must-have (بخش ۳ مشخصات):**
 - ثبت کوئست (عنوان، شرح کار، موقعیت روی نقشه، شعاع) در یک Modal
-- نمایش کوئست‌های فعال و قبلی روی نقشه (نشانگر سبز/خاکستری + دایرهٔ شعاع ژئوفنس برای فعال‌ها)
+- نمایش کوئست‌های فعال و قبلی روی نقشه 8-bit MapLibre (نشانگر مربع پیکسلی سبز/خاکستری + حلقهٔ شعاع ژئوفنس متر-دقیق برای فعال‌ها)
 - بررسی دوره‌ای موقعیت در پیش‌زمینه با بازهٔ قابل تنظیم (تایمر JS + `getCurrentPosition`) — هر بررسی در لاگ ثبت می‌شود
 - ژئوفنسینگ native برای پس‌زمینه؛ یک ژئوفنس به‌ازای هر کوئست فعال (`syncGeofences`)
 - «حالت نزدیکی»: افکت چشمک لبه‌های صفحه + نوتیفیکیشن محلی + دیالوگ تأیید (دکمهٔ تأیید ۲ ثانیه غیرفعال)
@@ -34,7 +34,8 @@
 
 ```text
 src/
-  components/   PixelButton، XPBar (TopBar)، EdgeFlashOverlay، NearbyQuestOverlay
+  assets/       mapStyle8bit.json (استایل 8-bit نقشه — Style JSON سمت کلاینت)
+  components/   PixelButton، XPBar (TopBar)، EdgeFlashOverlay، NearbyQuestOverlay، PixelMarker
   db/           database.ts (اسکیما)، quests.ts، profile.ts، settings.ts
   hooks/        useProximityMonitor.ts (مانیتور نزدیکی در سطح اپ — all-lifetime)
   navigation/   AppNavigator.tsx (Home / Map / AddQuest-modal / Settings)، navigationRef.ts
@@ -43,6 +44,7 @@ src/
   state/        GameContext.tsx (init + شروع مجدد ردیابی با AppState)
   utils/        constants.ts، leveling.ts، geo.ts (haversine)، appLifecycle.ts
 scripts/dev/    اسکریپت‌های تعمیر/تأیید محیط توسعه (fix-*.sh، verify-montquest.sh، init.sh)
+scripts/doctor.sh  preflight محیط (npm run doctor)
 android/.../com/montquest/   + MoveToBackgroundModule.kt (moveTaskToBack برای Exit)
 ```
 
@@ -60,9 +62,8 @@ android/.../com/montquest/   + MoveToBackgroundModule.kt (moveTaskToBack برا�
 2. **فایل محلی اندروید** (`android/local.properties` — هرگز commit نمی‌شود):
    ```bash
    echo "sdk.dir=$ANDROID_HOME" > android/local.properties
-   echo "MAPS_API_KEY=<کلید Google Maps Android API شما>" >> android/local.properties
    ```
-   `sdk.dir` مسیر Android SDK است (مثلاً `~/Android/Sdk` یا `~/Library/Android/sdk`). بدون `MAPS_API_KEY` اپ بالا می‌آید ولی نقشهٔ Android خالی می‌ماند.
+   `sdk.dir` مسیر Android SDK است (مثلاً `~/Android/Sdk` یا `~/Library/Android/sdk`). کلید API برای نقشه لازم نیست — نقشه MapLibre است و کاشی‌ها از OpenFreeMap (رایگان و بدون ثبت‌نام) می‌آیند.
 3. **Preflight محیط** (فقط چک — build/تست نمی‌کند):
    ```bash
    npm run doctor
@@ -90,7 +91,7 @@ npx eslint src App.tsx index.js __tests__
 
 مجوزهای زیر از قبل تعریف‌اند: `ACCESS_FINE_LOCATION`، `ACCESS_COARSE_LOCATION`، `ACCESS_BACKGROUND_LOCATION`، `FOREGROUND_SERVICE`، `FOREGROUND_SERVICE_LOCATION`، `POST_NOTIFICATIONS`، `RECEIVE_BOOT_COMPLETED`.
 
-1. **کلید Google Maps:** مقدار `MAPS_API_KEY` را در `android/local.properties` بگذارید؛ از طریق `manifestPlaceholders` در `android/app/build.gradle` به `${googleMapsApiKey}` در مانیفست تزریق می‌شود و هرگز commit نمی‌شود. بدون کلید، build سالم است ولی نقشهٔ Android خالی می‌ماند.
+1. **نقشه:** MapLibre است — **هیچ کلید API لازم نیست.** کاشی‌های برداری از OpenFreeMap (`https://tiles.openfreemap.org/planet`) و استایل 8-bit از `src/assets/mapStyle8bit.json` سمت کلاینت اعمال می‌شود. برای iOS فقط `cd ios && pod install` (SDK بومی MapLibre به‌صورت خودکار از طریق SPM اضافه می‌شود).
 2. **لایسنس TransistorSoft برای Release:** نسخهٔ ۵ کتابخانه برای build Release به کلید نیاز دارد (Debug بدون لایسنس کار می‌کند — ریسک بخش ۹ مشخصات):
 
 ```xml
@@ -118,7 +119,7 @@ npx eslint src App.tsx index.js __tests__
 
 ## حریم خصوصی
 
-هیچ دادهٔ مکانی به بیرون ارسال نمی‌شود؛ هیچ endpoint، حساب یا همگام‌سازی ابری پیکربندی نشده است. (نمایش کاشی‌های نقشه به سرویس نقشه/اینترنت نیاز دارد.)
+هیچ دادهٔ مکانی به بیرون ارسال نمی‌شود؛ هیچ endpoint، حساب یا همگام‌سازی ابری پیکربندی نشده است. (نمایش کاشی‌های نقشه از OpenFreeMap دریافت می‌شود — درخواست tile شامل zoom/x/y است و موقعیت کاربر را به سرور نمی‌فرستد؛ نقشهٔ آفلاین در MVP پشتیبانی نمی‌شود.)
 
 ## مدل داده (SQLite — `montquest.db`)
 

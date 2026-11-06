@@ -38,14 +38,7 @@ else
   bad "android/local.properties missing — create it:  echo \"sdk.dir=\$ANDROID_HOME\" > android/local.properties"
 fi
 
-# ── 3) MAPS_API_KEY (soft: blank map on Android without it) ───────
-if [ -f "$LP" ] && grep -qE '^MAPS_API_KEY=..+' "$LP"; then
-  ok "MAPS_API_KEY is set (Android map tiles will render)"
-else
-  warn "MAPS_API_KEY not set in android/local.properties — the Android map stays blank (debug build still runs)"
-fi
-
-# ── 4) TransistorSoft license keys (soft: release builds only) ────
+# ── 3) TransistorSoft license keys (soft: release builds only) ────
 MANIFEST="android/app/src/main/AndroidManifest.xml"
 if [ -f "$MANIFEST" ] && grep -q "com.transistorsoft.locationmanager.license" "$MANIFEST"; then
   ok "Android TransistorSoft license key present"

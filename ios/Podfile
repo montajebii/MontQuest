@@ -36,5 +36,9 @@ target 'MontQuest' do
       :mac_catalyst_enabled => false,
       # :ccache_enabled => true
     )
+    # maplibre-react-native: injects the MapLibre Native SPM package
+    # (maplibre-gl-native-distribution) into the project — required.
+    # https://maplibre.org/maplibre-react-native/docs/install
+    $MLRN.post_install(installer)
   end
 end

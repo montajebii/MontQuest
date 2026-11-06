@@ -4,17 +4,9 @@
 
 ## ۱. Android
 
-### ۱.۱ کلید Google Maps
-- کلید Google Maps Android API را در `android/local.properties` بگذارید:
-  ```properties
-  MAPS_API_KEY=AIza...
-  ```
-- مقدار از طریق `manifestPlaceholders` (فایل `android/app/build.gradle`) در
-  `AndroidManifest.xml` تزریق می‌شود (`${googleMapsApiKey}`)؛ **کلید هرگز commit نمی‌شود**
-  (`local.properties` در `.gitignore` است).
-- اگر کلید ست نشده باشد، placeholder مقدار `MISSING_GOOGLE_MAPS_API_KEY` می‌گیرد و نقشه خالی می‌ماند — build نمی‌شکند.
-- ☐ تأیید: `grep MAPS_API_KEY android/local.properties`
-- ☐ تأیید: `git status` نباید `local.properties` را نشان دهد
+### ۱.۱ نقشه (MapLibre)
+- نقشه **MapLibre + OpenFreeMap** است — **هیچ کلید API لازم نیست و هیچ placeholder/key در build یا مانیفست نیست.**
+- ☐ تأیید: `grep -rE "MAPS_API_KEY|google.android.geo|react-native-maps" android/ src/ ios/Podfile` باید خالی باشد
 
 ### ۱.۲ لایسنس TransistorSoft
 - کتابخانهٔ `react-native-background-geolocation` v5 برای build **Release** به کلید نیاز دارد (Debug بدون لایسنس کار می‌کند).
