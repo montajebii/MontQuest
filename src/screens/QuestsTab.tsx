@@ -15,7 +15,10 @@ import {
   getActiveQuests,
   getQuestHistoryWithTitles,
 } from '../db/quests';
-import { completeQuestAndReward } from '../services/rewardService';
+import {
+  completeQuestAndReward,
+  onQuestCompleted,
+} from '../services/rewardService';
 import { removeQuestGeofence, syncGeofences } from '../services/locationService';
 import { useGame } from '../state/GameContext';
 import { COINS_PER_QUEST, XP_PER_QUEST } from '../utils/constants';
@@ -48,6 +51,11 @@ const QuestsTab = ({ navigation, onChanged }: Props) => {
   useFocusEffect(
     useCallback(() => {
       load().catch(() => {});
+      // Keep live/history fresh when a quest completes via the App-level
+      // confirm dialog while this tab is already visible.
+      return onQuestCompleted(() => {
+        load().catch(() => {});
+      });
     }, [load]),
   );
 

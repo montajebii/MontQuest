@@ -143,6 +143,26 @@ jest.mock('@notifee/react-native', () => {
     requestPermission: jest.fn(() => Promise.resolve({ authorizationStatus: 1 })),
     createChannel: jest.fn(() => Promise.resolve('nearby')),
     displayNotification: jest.fn(() => Promise.resolve('id')),
+    onForegroundEvent: jest.fn(() => jest.fn()),
+    onBackgroundEvent: jest.fn(() => Promise.resolve()),
+    getInitialNotification: jest.fn(() => Promise.resolve(null)),
+    AndroidImportance: {
+      NONE: 0,
+      MIN: 1,
+      LOW: 2,
+      DEFAULT: 3,
+      HIGH: 4,
+      MAX: 5,
+    },
+    EventType: {
+      DISMISSED: 0,
+      PRESS: 1,
+      PRESS_ACTION: 2,
+      DELIVERED: 3,
+      APP_BLOCKED: 4,
+      CHANNEL_BLOCKED: 5,
+      ERROR: 6,
+    },
   };
   return { __esModule: true, default: api, ...api };
 });

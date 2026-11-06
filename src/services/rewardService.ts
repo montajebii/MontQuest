@@ -2,6 +2,22 @@ import { getDB } from '../db/database';
 import { applyXP } from '../utils/leveling';
 import { XP_PER_QUEST, COINS_PER_QUEST } from '../utils/constants';
 
+/**
+ * Lightweight completion event so UI layers can react (e.g. the nearby
+ * dialog closes itself when its quest is completed manually elsewhere)
+ * without coupling them to each other. Behavior of the reward itself is
+ * unchanged.
+ */
+type QuestCompletedListener = (questId: number) => void;
+const completionListeners = new Set<QuestCompletedListener>();
+
+export const onQuestCompleted = (cb: QuestCompletedListener): (() => void) => {
+  completionListeners.add(cb);
+  return () => {
+    completionListeners.delete(cb);
+  };
+};
+
 export const completeQuestAndReward = async (questId: number) => {
   const db = await getDB();
   const now = Date.now();
@@ -41,6 +57,7 @@ export const completeQuestAndReward = async (questId: number) => {
     );
 
     await db.executeSql('COMMIT');
+    completionListeners.forEach((cb) => cb(questId));
     return newState;
   } catch (e) {
     await db.executeSql('ROLLBACK');

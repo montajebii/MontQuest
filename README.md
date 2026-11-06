@@ -34,15 +34,19 @@
 
 ```text
 src/
-  components/   PixelButton، XPBar (TopBar)، EdgeFlashOverlay
+  components/   PixelButton، XPBar (TopBar)، EdgeFlashOverlay، NearbyQuestOverlay
   db/           database.ts (اسکیما)، quests.ts، profile.ts، settings.ts
-  navigation/   AppNavigator.tsx (Home / Map / AddQuest-modal / Settings)
+  hooks/        useProximityMonitor.ts (مانیتور نزدیکی در سطح اپ — all-lifetime)
+  navigation/   AppNavigator.tsx (Home / Map / AddQuest-modal / Settings)، navigationRef.ts
   screens/      HomeScreen، MapScreen، AddQuestScreen، QuestsTab، SettingsScreen
-  services/     locationService.ts (پیکربندی/شروع/توقف/ژئوفنس/نوتیفیکیشن)، rewardService.ts (تراکنش پاداش)
+  services/     locationService.ts، rewardService.ts (تراکنش پاداش + رویداد onQuestCompleted)
   state/        GameContext.tsx (init + شروع مجدد ردیابی با AppState)
   utils/        constants.ts، leveling.ts، geo.ts (haversine)، appLifecycle.ts
+scripts/dev/    اسکریپت‌های تعمیر/تأیید محیط توسعه (fix-*.sh، verify-montquest.sh، init.sh)
 android/.../com/montquest/   + MoveToBackgroundModule.kt (moveTaskToBack برای Exit)
 ```
+
+منطق نزدیکی (listener ژئوفنس، چک دوره‌ای، cooldown، دیالوگ تأیید) در هوک `useProximityMonitor` است که یک‌بار در `App.tsx` از طریق `NearbyQuestOverlay` مونت می‌شود — یعنی از **هر صفحه‌ای** و در پس‌زمینه فعال است، نه فقط وقتی نقشه باز است. تایمر چک دوره‌ای هنگام background شدن متوقف و در بازگشت دوباره شروع می‌شود (مسیر پس‌زمینه با ژئوفنس native پوشش داده می‌شود).
 
 ## پیش‌نیازها و نصب
 
@@ -60,12 +64,12 @@ npm run android   # یا: npm run ios
 npm test          # تست‌های jest
 ```
 
-بررسی کیفیت (هر دو بدون خطا هستند):
-
 ```bash
 npx tsc --noEmit
-npx eslint src index.js __tests__ App.tsx
+npx eslint src App.tsx index.js __tests__
 ```
+
+چک‌لیست انتشار (کلیدهای API/لایسنس، keystore، QA دستگاه): [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md).
 
 ## تنظیمات native ضروری
 
@@ -73,7 +77,7 @@ npx eslint src index.js __tests__ App.tsx
 
 مجوزهای زیر از قبل تعریف‌اند: `ACCESS_FINE_LOCATION`، `ACCESS_COARSE_LOCATION`، `ACCESS_BACKGROUND_LOCATION`، `FOREGROUND_SERVICE`، `FOREGROUND_SERVICE_LOCATION`، `POST_NOTIFICATIONS`، `RECEIVE_BOOT_COMPLETED`.
 
-1. **کلید Google Maps:** مقدار `com.google.android.geo.API_KEY` (که با placeholder `YOUR_GOOGLE_MAPS_API_KEY` گذاشته شده) را با کلید Google Maps Android API خود جایگزین کنید؛ نقشهٔ Android بدون آن خالی می‌ماند.
+1. **کلید Google Maps:** مقدار `MAPS_API_KEY` را در `android/local.properties` بگذارید؛ از طریق `manifestPlaceholders` در `android/app/build.gradle` به `${googleMapsApiKey}` در مانیفست تزریق می‌شود و هرگز commit نمی‌شود. بدون کلید، build سالم است ولی نقشهٔ Android خالی می‌ماند.
 2. **لایسنس TransistorSoft برای Release:** نسخهٔ ۵ کتابخانه برای build Release به کلید نیاز دارد (Debug بدون لایسنس کار می‌کند — ریسک بخش ۹ مشخصات):
 
 ```xml
@@ -89,11 +93,12 @@ npx eslint src index.js __tests__ App.tsx
 ## رفتار پایش، Exit و محدودیت‌ها
 
 - **Exit:** `stop()` کامل سرویس + `moveTaskToBack` (Android). اپ kill نمی‌شود. با بازگشت، اگر کلید `tracking_enabled` روشن باشد (پیش‌فرض)، `start()` دوباره اجرا می‌شود؛ خود Exit این کلید را تغییر نمی‌دهد.
-- **پس‌زمینه (Android):** Foreground Service + `stopOnTerminate: false` + `startOnBoot: true`؛ رویداد ژئوفنس در پس‌زمینه از مسیر همان JS زنده (listener در MapScreen) نوتیفیکیشن می‌فرستد؛ در حالت kill‌شده، Headless Task ثبت‌شده در `index.js` نوتیفیکیشن را نمایش می‌دهد.
+- **پس‌زمینه (Android):** Foreground Service + `stopOnTerminate: false` + `startOnBoot: true`؛ listener ژئوفنس در سطح اپ (`useProximityMonitor`) در پس‌زمینه هم زنده است و نوتیفیکیشن می‌فرستد؛ در حالت kill‌شده، Headless Task ثبت‌شده در `index.js` نوتیفیکیشن را نمایش می‌دهد.
+- **تپ نوتیفیکیشن:** با `notifee.onForegroundEvent`/`onBackgroundEvent` (در `App.tsx`) و `navigationRef` کاربر به صفحهٔ نقشه برده می‌شود (`pressAction.id === 'default'`).
 - **پس‌زمینه (iOS):** سیستم‌عامل اپ را برای رویداد ژئوفنس wake می‌کند و Headless Task اعلان را می‌فرستد. **Force Kill از App Switcher در iOS تحویل رویداد را تضمین‌نشدنی می‌کند** — محدودیت سیستم‌عامل است و در راهنمای کاربر ذکر شده.
 - **محدودیت‌های OEM:** برخی برندها (شیائومی، سامسونگ، هواوی و…) سرویس پس‌زمینه را می‌کشند؛ راهنمای استثناکردن اپ از بهینه‌سازی باتری در صفحهٔ تنظیمات نمایش داده می‌شود.
 - **Exit در iOS:** اپ نمی‌تواند خودش به پس‌زمینه برود؛ Exit فقط ردیابی را متوقف می‌کند و کاربر با ژست Home خارج می‌شود (مستندشده در کد).
-- **بازهٔ بررسی:** به‌صورت تایمر دوره‌ای در پیش‌زمینه پیاده شده است (`getCurrentPosition` + ارزیابی فاصله در JS) و لاگ `[MontQuest] position check` می‌دهد (AC-03). در پس‌زمینه، تشخیص نزدیکی بر عهدهٔ ژئوفنس native است — این تطبیق سالم این دو سازوکار است، نه `locationUpdateInterval`.
+- **بازهٔ بررسی:** به‌صورت تایمر دوره‌ای در پیش‌زمینه پیاده شده است (`getCurrentPosition` + ارزیابی فاصله در JS، داخل `useProximityMonitor`) و لاگ `[MontQuest] position check` فقط در `__DEV__` می‌دهد (AC-03). تایمر هنگام background شدن متوقف می‌شود؛ در پس‌زمینه تشخیص نزدیکی بر عهدهٔ ژئوفنس native است.
 - **دقت ژئوفنس:** `distanceFilter: 75` و `stopTimeout: 5` برای باتری (بخش ۷). طبق مستندات SDK، شعاع زیر ~۲۰۰ متر در عمل کم‌اتکاتر است؛ مقدار پیش‌فرض ۱۰۰ طبق مشخصات حفظ شده و قابل تنظیم است.
 - **انحراف مستند از مشخصات:** فیلد `setNotificationResponsiveness` در API عمومی v5 این SDK برای React Native وجود ندارد (فقط native Android)؛ بنابراین قابل تنظیم نیست.
 - `geofenceInitialTriggerEntry: true` — اگر کاربر هنگام ثبت کوئست داخل شعاع باشد، رویداد ورود فوراً صادر می‌شود.

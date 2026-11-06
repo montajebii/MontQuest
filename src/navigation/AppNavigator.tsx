@@ -5,6 +5,7 @@ import HomeScreen from '../screens/HomeScreen';
 import MapScreen from '../screens/MapScreen';
 import AddQuestScreen from '../screens/AddQuestScreen';
 import SettingsScreen from '../screens/SettingsScreen';
+import { navigationRef } from './navigationRef';
 
 export type RootStackParamList = {
   Home: undefined;
@@ -16,7 +17,7 @@ export type RootStackParamList = {
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 const AppNavigator = () => (
-  <NavigationContainer>
+  <NavigationContainer ref={navigationRef}>
     <Stack.Navigator
       initialRouteName="Home"
       screenOptions={{ headerStyle: { backgroundColor: '#000' }, headerTintColor: '#0ff' }}>

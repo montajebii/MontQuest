@@ -1,185 +1,41 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  AppState,
-  Modal,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import React, { useCallback, useState } from 'react';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import MapView, { Circle, Marker } from 'react-native-maps';
-import BackgroundGeolocation from 'react-native-background-geolocation';
 import { useFocusEffect } from '@react-navigation/native';
 import PixelButton from '../components/PixelButton';
-import EdgeFlashOverlay from '../components/EdgeFlashOverlay';
 import XPBar from '../components/XPBar';
 import QuestsTab from './QuestsTab';
-import { getActiveQuests, getAllQuests, getQuestById } from '../db/quests';
-import { completeQuestAndReward } from '../services/rewardService';
-import {
-  getCurrentLocation,
-  getCheckIntervalMinutes,
-  isTrackingEnabled,
-  showNearbyNotification,
-  syncGeofences,
-} from '../services/locationService';
-import { useGame } from '../state/GameContext';
-import { DEFAULT_COOLDOWN_MINUTES, MIN_CONFIRM_DELAY_MS } from '../utils/constants';
-import { haversineMeters } from '../utils/geo';
+import { getActiveQuests, getAllQuests } from '../db/quests';
+import { onQuestCompleted } from '../services/rewardService';
 import { Quest } from '../types';
-
-const COOLDOWN_MS = DEFAULT_COOLDOWN_MINUTES * 60 * 1000;
 
 /**
  * Play screen (spec §4): TopBar (Coins|Level|XP), map with quest markers,
- * FAB for adding quests, bottom tabs [Map][Quests], and the nearby state
- * machine of spec §6.
+ * FAB for adding quests and bottom tabs [Map][Quests].
+ * Proximity detection / the nearby dialog live app-wide in
+ * `useProximityMonitor` + `NearbyQuestOverlay` — NOT here, so they work
+ * from any screen (and in the background).
  */
 const MapScreen = ({ navigation }: any) => {
-  const { refreshProfile } = useGame();
   const [tab, setTab] = useState<'map' | 'quests'>('map');
   const [activeQuests, setActiveQuests] = useState<Quest[]>([]);
   const [allQuests, setAllQuests] = useState<Quest[]>([]);
-
-  const [nearbyQuestId, setNearbyQuestId] = useState<number | null>(null);
-  const [nearbyTitle, setNearbyTitle] = useState('');
-  const [dialogVisible, setDialogVisible] = useState(false);
-  const [confirmEnabled, setConfirmEnabled] = useState(false);
-  const [edgeFlash, setEdgeFlash] = useState(false);
-
-  const lastPromptRef = useRef(0);
-  const confirmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const checkRef = useRef<() => Promise<void>>(async () => {});
 
   const loadQuests = useCallback(async () => {
     setActiveQuests(await getActiveQuests());
     setAllQuests(await getAllQuests());
   }, []);
 
-  // Reload whenever the screen regains focus (e.g. returning from the
-  // AddQuest modal).
+  // Reload on focus (e.g. returning from the AddQuest modal) and whenever
+  // any quest completes (confirm dialog at App level or manual completion).
   useFocusEffect(
     useCallback(() => {
       loadQuests().catch(() => {});
+      return onQuestCompleted(() => {
+        loadQuests().catch(() => {});
+      });
     }, [loadQuests]),
   );
-
-  /** IDLE → NEARBY_PROMPT (spec §6): edge flash + dialog, confirm delayed 2s. */
-  const triggerNearby = useCallback((questId: number, title: string) => {
-    const now = Date.now();
-    if (now - lastPromptRef.current < COOLDOWN_MS) {return;} // AC-14
-    lastPromptRef.current = now;
-    setNearbyQuestId(questId);
-    setNearbyTitle(title);
-    setDialogVisible(true);
-    setConfirmEnabled(false); // AC-06: no accidental confirm
-    setEdgeFlash(true);
-    confirmTimerRef.current = setTimeout(
-      () => setConfirmEnabled(true),
-      MIN_CONFIRM_DELAY_MS,
-    );
-  }, []);
-
-  const closeNearbyUi = useCallback(() => {
-    if (confirmTimerRef.current) {clearTimeout(confirmTimerRef.current);}
-    confirmTimerRef.current = null;
-    setDialogVisible(false);
-    setNearbyQuestId(null);
-    setNearbyTitle('');
-    setEdgeFlash(false);
-  }, []);
-
-  /** One proximity pass: current position vs. every active quest (AC-02). */
-  const runProximityCheck = useCallback(async () => {
-    try {
-      if (!(await isTrackingEnabled())) {return;}
-      const pos = await getCurrentLocation();
-      console.log(
-        `[MontQuest] position check @ ${new Date().toISOString()} ` +
-          `${pos.latitude.toFixed(5)},${pos.longitude.toFixed(5)}`,
-      );
-      const quests = await getActiveQuests();
-      for (const q of quests) {
-        const dist = haversineMeters(pos.latitude, pos.longitude, q.latitude, q.longitude);
-        if (dist <= q.radius) {
-          if (AppState.currentState === 'active') {
-            triggerNearby(q.id, q.title);
-          }
-          break;
-        }
-      }
-    } catch {}
-  }, [triggerNearby]);
-
-  useEffect(() => {
-    checkRef.current = runProximityCheck;
-  }, [runProximityCheck]);
-
-  // Foreground periodic check (AC-03). The interval is re-read from the
-  // settings DB every cycle so changes in Options apply without restart.
-  useEffect(() => {
-    let cancelled = false;
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    const loop = async () => {
-      await checkRef.current();
-      if (cancelled) {return;}
-      const minutes = await getCheckIntervalMinutes();
-      timer = setTimeout(loop, Math.max(1, minutes) * 60_000);
-    };
-    loop();
-    return () => {
-      cancelled = true;
-      if (timer) {clearTimeout(timer);}
-    };
-  }, []);
-
-  // Native geofence events — foreground AND background while JS is alive
-  // (Android keeps JS alive via the foreground service; AC-05/AC-10).
-  useEffect(() => {
-    const sub = BackgroundGeolocation.onGeofence(async (event) => {
-      if (event.action !== 'ENTER') {return;}
-      const questId = Number(event.extras?.questId);
-      if (!Number.isFinite(questId)) {return;}
-      const quest = await getQuestById(questId);
-      if (!quest || quest.status !== 'active') {return;}
-      // AC-05: local notification in every app state.
-      await showNearbyNotification(quest.title).catch(() => {});
-      if (AppState.currentState === 'active') {
-        triggerNearby(quest.id, quest.title);
-      }
-    });
-    return () => sub.remove();
-  }, [triggerNearby]);
-
-  // Re-entering the app: re-evaluate proximity (spec §6 — backgrounded
-  // NEARBY_PROMPT is re-assessed on return).
-  useEffect(() => {
-    const sub = AppState.addEventListener('change', (state) => {
-      if (state === 'active') {
-        checkRef.current().catch(() => {});
-      }
-    });
-    return () => sub.remove();
-  }, []);
-
-  useEffect(() => closeNearbyUi, [closeNearbyUi]);
-
-  /** NEARBY_PROMPT → Confirm: reward transaction, history, geofence teardown. */
-  const handleConfirm = async () => {
-    if (nearbyQuestId === null) {return;}
-    try {
-      const reward = await completeQuestAndReward(nearbyQuestId);
-      if (reward) {await refreshProfile();}
-      await loadQuests();
-      await syncGeofences();
-    } catch {}
-    closeNearbyUi();
-  };
-
-  /** NEARBY_PROMPT → Not now: cooldown is enforced in triggerNearby (AC-14). */
-  const handleNotNow = () => {
-    closeNearbyUi();
-  };
 
   const handleQuestsChanged = useCallback(() => {
     loadQuests().catch(() => {});
@@ -248,23 +104,6 @@ const MapScreen = ({ navigation }: any) => {
           </Text>
         </TouchableOpacity>
       </View>
-
-      <EdgeFlashOverlay visible={edgeFlash} />
-
-      <Modal
-        visible={dialogVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={handleNotNow}>
-        <View style={styles.backdrop}>
-          <View style={styles.dialog}>
-            <Text style={styles.dialogTitle}>{nearbyTitle}</Text>
-            <Text style={styles.dialogText}>آیا کار این کوئست را انجام دادید؟</Text>
-            <PixelButton title="تأیید" disabled={!confirmEnabled} onPress={handleConfirm} />
-            <PixelButton title="فعلاً نه" onPress={handleNotNow} />
-          </View>
-        </View>
-      </Modal>
     </View>
   );
 };
@@ -304,22 +143,6 @@ const styles = StyleSheet.create({
   tabActive: { backgroundColor: '#111', borderTopColor: '#0ff' },
   tabTxt: { color: '#888', fontFamily: 'monospace', fontSize: 16, letterSpacing: 2 },
   tabTxtActive: { color: '#0ff', fontWeight: 'bold' },
-  backdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.75)',
-    justifyContent: 'center',
-    padding: 24,
-  },
-  dialog: { backgroundColor: '#111', borderColor: '#fff', borderWidth: 3, padding: 16 },
-  dialogTitle: {
-    color: '#0ff',
-    fontFamily: 'monospace',
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  dialogText: { color: '#fff', fontFamily: 'monospace', fontSize: 16, marginBottom: 12 },
 });
 
 export default MapScreen;
