@@ -4,6 +4,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import HomeScreen from '../screens/HomeScreen';
 import MapScreen from '../screens/MapScreen';
 import AddQuestScreen from '../screens/AddQuestScreen';
+import ProfileScreen from '../screens/ProfileScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import { navigationRef } from './navigationRef';
 
@@ -11,6 +12,7 @@ export type RootStackParamList = {
   Home: undefined;
   Map: undefined;
   AddQuest: undefined;
+  Profile: undefined;
   Settings: undefined;
 };
 
@@ -33,6 +35,7 @@ const AppNavigator = () => (
         }}
       />
       <Stack.Screen name="Settings" component={SettingsScreen} options={{ title: 'تنظیمات' }} />
+      <Stack.Screen name="Profile" component={ProfileScreen} options={{ title: 'پروفایل' }} />
     </Stack.Navigator>
   </NavigationContainer>
 );

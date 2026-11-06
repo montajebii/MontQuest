@@ -25,6 +25,11 @@ const HomeScreen = ({ navigation }: any) => {
       <XPBar />
       <PixelButton title="Play" onPress={() => navigation.navigate('Map')} />
       <PixelButton title="Options" onPress={() => navigation.navigate('Settings')} />
+      <PixelButton
+        title="Profile"
+        accessibilityLabel="مشاهدهٔ پروفایل و آواتار قهرمان"
+        onPress={() => navigation.navigate('Profile')}
+      />
       <PixelButton title="Exit" onPress={handleExit} />
     </View>
   );
