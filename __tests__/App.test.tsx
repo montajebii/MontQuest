@@ -3,7 +3,7 @@
  */
 
 import 'react-native';
-import React from 'react'; // eslint-disable-line @typescript-eslint/no-shadow
+import React from 'react';
 import { it, expect, jest } from '@jest/globals';
 import renderer, { act, ReactTestRenderer } from 'react-test-renderer';
 
@@ -12,11 +12,13 @@ import renderer, { act, ReactTestRenderer } from 'react-test-renderer';
 // For a smoke test we only need to verify that App itself (GameProvider +
 // StatusBar + shell) renders and unmounts cleanly.
 jest.mock('../src/navigation/AppNavigator', () => {
-  const React = require('react');
+  // require() here (not the outer React import) — jest.mock factories may
+  // only reference whitelisted identifiers.
+  const { createElement } = require('react');
   const { View } = require('react-native');
   return {
     __esModule: true,
-    default: () => React.createElement(View, { testID: 'app-navigator' }),
+    default: () => createElement(View, { testID: 'app-navigator' }),
   };
 });
 

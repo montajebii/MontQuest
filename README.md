@@ -48,28 +48,41 @@ android/.../com/montquest/   + MoveToBackgroundModule.kt (moveTaskToBack برا�
 
 منطق نزدیکی (listener ژئوفنس، چک دوره‌ای، cooldown، دیالوگ تأیید) در هوک `useProximityMonitor` است که یک‌بار در `App.tsx` از طریق `NearbyQuestOverlay` مونت می‌شود — یعنی از **هر صفحه‌ای** و در پس‌زمینه فعال است، نه فقط وقتی نقشه باز است. تایمر چک دوره‌ای هنگام background شدن متوقف و در بازگشت دوباره شروع می‌شود (مسیر پس‌زمینه با ژئوفنس native پوشش داده می‌شود).
 
-## پیش‌نیازها و نصب
+## اولین اجرا: از clone تا اولین کوئست
 
-- Node.js ≥ 18، Android Studio/SDK (برای Android)، Xcode + CocoaPods (برای iOS روی macOS)
+پیش‌نیازها: Node.js ≥ 18، Android Studio/SDK (برای Android)، Xcode + CocoaPods (فقط برای iOS روی macOS).
+
+1. **Clone و نصب:**
+   ```bash
+   git clone <repo-url> MontQuest && cd MontQuest
+   npm install
+   ```
+2. **فایل محلی اندروید** (`android/local.properties` — هرگز commit نمی‌شود):
+   ```bash
+   echo "sdk.dir=$ANDROID_HOME" > android/local.properties
+   echo "MAPS_API_KEY=<کلید Google Maps Android API شما>" >> android/local.properties
+   ```
+   `sdk.dir` مسیر Android SDK است (مثلاً `~/Android/Sdk` یا `~/Library/Android/sdk`). بدون `MAPS_API_KEY` اپ بالا می‌آید ولی نقشهٔ Android خالی می‌ماند.
+3. **Preflight محیط** (فقط چک — build/تست نمی‌کند):
+   ```bash
+   npm run doctor
+   ```
+4. **اجرا:**
+   ```bash
+   npm run android          # شبیه‌ساز/دستگاه متصل
+   # یا برای iOS (روی macOS):
+   cd ios && pod install && cd -
+   npm run ios
+   ```
+5. **اولین اجرای اپ:** مجوز Location را روی **«Allow all the time»** و مجوز Notifications را Allow کنید (برای ردیابی پس‌زمینه الزامی است — AC-13 وضعیت مجوزها را در Options نشان می‌دهد).
+6. **اولین کوئست:** Play ← دکمهٔ «+» ← عنوان و شرح ← روی نقشه بزنید یا «موقعیت من» ← شعاع ← ذخیره. راهنمای کامل تست: [TESTING.md](TESTING.md).
+7. **لایسنس TransistorSoft:** build **debug** بدون لایسنس کار می‌کند؛ برای build Release کلید Android (`com.transistorsoft.locationmanager.license` در مانیفست) و iOS (`TSLocationManagerLicense` در Info.plist) لازم است — مرحله‌به‌مرحله در [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md).
 
 ```bash
-npm install
-cd ios && pod install && cd -   # فقط macOS
-```
-
-اجرا:
-
-```bash
-npm run android   # یا: npm run ios
 npm test          # تست‌های jest
-```
-
-```bash
 npx tsc --noEmit
 npx eslint src App.tsx index.js __tests__
 ```
-
-چک‌لیست انتشار (کلیدهای API/لایسنس، keystore، QA دستگاه): [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md).
 
 ## تنظیمات native ضروری
 
