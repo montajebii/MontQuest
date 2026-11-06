@@ -158,26 +158,26 @@ const UNCLUSTERED_FILTER: Expression = ['!', ['has', 'point_count']];
 
 const EMPTY_POI_SHAPE: FeatureCollection = { type: 'FeatureCollection', features: [] };
 
-interface CameraConfig {
-  center: [number, number];
-  zoom: number;
-  heading: number;
-}
+/** Imperative camera stop (device QA: no state-wired Camera props — they
+ * re-apply on every re-render, snapping the map back and cancelling tile
+ * requests). */
+const cameraStop = (
+  center: [number, number],
+  zoom: number,
+  heading = 0,
+  animationDuration = 600,
+) => ({ centerCoordinate: center, zoomLevel: zoom, heading, animationDuration });
 
 const MapScreen = ({ navigation }: any) => {
   const [tab, setTab] = useState<'map' | 'quests'>('map');
   const [activeQuests, setActiveQuests] = useState<Quest[]>([]);
   const [allQuests, setAllQuests] = useState<Quest[]>([]);
-  const [cameraCfg, setCameraCfg] = useState<CameraConfig>({
-    center: [DEFAULT_LONGITUDE, DEFAULT_LATITUDE],
-    zoom: 14,
-    heading: 0,
-  });
   const [locationAllowed, setLocationAllowed] = useState(false);
   const [mapHeading, setMapHeading] = useState(0);
   const [pois, setPois] = useState<FeatureCollection | null>(null);
 
   const mapRef = useRef<MapLibreRN.MapViewRef | null>(null);
+  const cameraRef = useRef<MapLibreRN.CameraRef | null>(null);
 
   const loadQuests = useCallback(async () => {
     setActiveQuests(await getActiveQuests());
@@ -205,11 +205,9 @@ const MapScreen = ({ navigation }: any) => {
       if (!allowed) {return;}
       try {
         const pos = await getCurrentLocation();
-        setCameraCfg({
-          center: [pos.longitude, pos.latitude],
-          zoom: 14,
-          heading: 0,
-        });
+        cameraRef.current?.setCamera(
+          cameraStop([pos.longitude, pos.latitude], 14, 0, 800),
+        );
         loadPois(pos.latitude, pos.longitude);
       } catch {}
     })();
@@ -238,12 +236,10 @@ const MapScreen = ({ navigation }: any) => {
     const coords = geometry?.coordinates;
     if (!Array.isArray(coords) || coords.length < 2) {return;}
     const currentZoom = (await mapRef.current?.getZoom()) ?? 12;
-    setCameraCfg({
-      center: [coords[0], coords[1]],
-      zoom: Math.min(currentZoom + 2, 17),
-      heading: cameraCfg.heading,
-    });
-  }, [cameraCfg.heading]);
+    cameraRef.current?.setCamera(
+      cameraStop([coords[0], coords[1]], Math.min(currentZoom + 2, 17)),
+    );
+  }, []);
 
   const handleQuestsChanged = useCallback(() => {
     loadQuests().catch(() => {});
@@ -288,11 +284,9 @@ const MapScreen = ({ navigation }: any) => {
     }
     try {
       const pos = await getCurrentLocation();
-      setCameraCfg({
-        center: [pos.longitude, pos.latitude],
-        zoom: 16,
-        heading: 0,
-      });
+      cameraRef.current?.setCamera(
+        cameraStop([pos.longitude, pos.latitude], 16, 0, 800),
+      );
       loadPois(pos.latitude, pos.longitude);
     } catch (e) {
       Alert.alert('خطا', 'موقعیت فعلی دریافت نشد — در فضای باز دوباره امتحان کنید.');
@@ -302,21 +296,22 @@ const MapScreen = ({ navigation }: any) => {
   /** Search hit → fly the camera to the place (zoom 15). */
   const handleSearchPick = useCallback(
     (hit: { latitude: number; longitude: number }) => {
-      setCameraCfg({
-        center: [hit.longitude, hit.latitude],
-        zoom: 15,
-        heading: 0,
-      });
+      cameraRef.current?.setCamera(
+        cameraStop([hit.longitude, hit.latitude], 15, 0, 800),
+      );
     },
     [],
   );
 
   /** Compass: ease back to north, preserving the user's centre + zoom. */
   const handleCompass = useCallback(async () => {
-    const center = (await mapRef.current?.getCenter()) ?? cameraCfg.center;
-    const zoom = (await mapRef.current?.getZoom()) ?? cameraCfg.zoom;
-    setCameraCfg({ center: [center[0], center[1]], zoom, heading: 0 });
-  }, [cameraCfg.center, cameraCfg.zoom]);
+    const center = (await mapRef.current?.getCenter()) ?? [
+      DEFAULT_LONGITUDE,
+      DEFAULT_LATITUDE,
+    ];
+    const zoom = (await mapRef.current?.getZoom()) ?? 14;
+    cameraRef.current?.setCamera(cameraStop([center[0], center[1]], zoom, 0, 400));
+  }, []);
 
   const compassVisible = Math.abs(((mapHeading % 360) + 360) % 360) > 5;
 
@@ -347,11 +342,12 @@ const MapScreen = ({ navigation }: any) => {
                 setMapHeading(feature?.properties?.heading ?? 0);
               }}>
               <MapLibreRN.Camera
-                centerCoordinate={cameraCfg.center}
-                zoomLevel={cameraCfg.zoom}
-                heading={cameraCfg.heading}
-                animationMode="easeTo"
-                animationDuration={400}
+                ref={cameraRef}
+                defaultSettings={{
+                  centerCoordinate: [DEFAULT_LONGITUDE, DEFAULT_LATITUDE],
+                  zoomLevel: 14,
+                  heading: 0,
+                }}
               />
               <MapLibreRN.Images
                 images={{
@@ -366,6 +362,9 @@ const MapScreen = ({ navigation }: any) => {
                   'tex-building': MAP_TEXTURES['tex-building'],
                 }}
               />
+              <MapLibreRN.UserLocation visible={true}>
+                <PixelUserDot />
+              </MapLibreRN.UserLocation>
 
               {/* Geofence radius rings for active quests (meters-accurate) */}
               <MapLibreRN.ShapeSource id="geofences" shape={geofenceShape}>
