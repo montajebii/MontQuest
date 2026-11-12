@@ -174,6 +174,14 @@ npx eslint src App.tsx index.js __tests__
 
 `npx tsc --noEmit` و `npx eslint` بدون خطا هستند؛ `npm test` شامل ۴ suite و ۱۲ تست پاس است (smoke رندر App + لولینگ + haversine + تراکنش پاداش).
 
+## CI و انتشار خودکار
+
+- **CI** (`.github/workflows/ci.yml`): روی هر push به main و هر PR — ‏tsc + eslint + jest.
+- **Android Release** (`.github/workflows/android-release.yml`): با push تگ `v*` یا اجرای دستی (workflow_dispatch) — ساخت `assembleRelease` روی GitHub Actions، آپلود APK به‌عنوان artifact و (برای تگ‌ها) پیوست خودکار آن به GitHub Release:
+  ```bash
+  git tag v1.0.0 && git push origin v1.0.0
+  ```
+
 ## خارج از محدودهٔ MVP
 
 ویرایش کوئست پس از ثبت، افکت‌های صوتی، آواتار پیکسلی و خروجی CSV — طبق بخش ۹ مشخصات پیاده نشده‌اند.
