@@ -43,7 +43,6 @@ src/
   services/     locationService.ts، rewardService.ts (تراکنش پاداش + رویداد onQuestCompleted)
   state/        GameContext.tsx (init + شروع مجدد ردیابی با AppState)
   utils/        constants.ts، leveling.ts، geo.ts (haversine)، appLifecycle.ts
-scripts/dev/    اسکریپت‌های تعمیر/تأیید محیط توسعه (fix-*.sh، verify-montquest.sh، init.sh)
 scripts/doctor.sh  preflight محیط (npm run doctor)
 android/.../com/montquest/   + MoveToBackgroundModule.kt (moveTaskToBack برای Exit)
 ```
